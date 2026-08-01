@@ -551,7 +551,9 @@ def main():
         if meta is None:
             continue
         grp = meta.get("group", "Contexto")
-        grouped.setdefault(grp, []).append(feat)
+        is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D
+        imp = importance_map.get(feat, 0) if not is_extra else -1
+        grouped.setdefault(grp, []).append((feat, imp, is_extra))
 
     rows_html = ""
     n_extra = 0
@@ -560,10 +562,12 @@ def main():
         feats = grouped.get(grp, [])
         if not feats:
             continue
+        # Sort: model features first by importance desc, then off-model
+        feats.sort(key=lambda x: (x[2], -x[1]))
         grp_bg = GROUP_COLORS.get(grp, "rgba(158,158,158,0.08)")
         rows_html += f'<tr><td colspan="5" style="background:{grp_bg};padding:8px 10px;font-weight:700;font-size:0.9em;color:#bbb;letter-spacing:0.5px;border-top:1px solid #2a2a4a;">{grp}</td></tr>'
 
-        for feat in feats:
+        for feat, imp_val, is_extra in feats:
             meta = FEATURE_META[feat]
             ftype = meta.get("type", "other")
             val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
@@ -577,17 +581,12 @@ def main():
             row_bg = "background:rgba(255,152,0,0.04);" if is_extra else ""
             desc_style = "font-style:italic;color:#aaa;" if is_extra else "color:#ddd;"
 
-            # Importance bar
+            # Importance display
             if not is_extra and feat in importance_map and importance_map[feat] > 0:
                 imp_pct = importance_map[feat]
-                imp_html = f'''<div style="display:flex;align-items:center;gap:6px;">
-                    <div style="width:60px;height:10px;background:#1a1a2e;border-radius:5px;overflow:hidden;border:1px solid #2a2a4a;">
-                        <div style="width:{imp_pct:.0f}%;height:100%;background:#2196F3;border-radius:5px;"></div>
-                    </div>
-                    <span style="color:#64B5F6;font-size:0.8em;font-weight:600;">{imp_pct:.0f}%</span>
-                </div>'''
+                imp_html = f'<span style="color:#64B5F6;font-size:1em;font-weight:600;">{imp_pct:.0f}%</span>'
             else:
-                imp_html = '<span style="color:#555;font-size:0.8em;">—</span>'
+                imp_html = '<span style="color:#555;font-size:0.9em;">—</span>'
 
             pct_colors = {"normal":"#4CAF50","elevated":"#F9A825","very_high":"#FF9800","extreme":"#F44336","critical":"#B71C1C"}
             pct_labels = {"normal":"Normal","elevated":"Elevado","very_high":"Muito Alto","extreme":"Extremo","critical":"CRÍTICO"}
