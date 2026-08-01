@@ -238,10 +238,7 @@ def main():
     st.sidebar.caption(f"📂 Dados: {chart_df['date'].min().date()} → {last_date} ({len(chart_df)} dias)")
     st.sidebar.success("✅ Dados atualizados")
 
-    # Horizon selector
-    st.sidebar.markdown("---")
-    horizon = st.sidebar.radio("🔮 Horizonte de previsão", ["T+3 (3 dias)", "T+5 (5 dias)"], index=1, horizontal=True)
-    horizon_days = 3 if "T+3" in horizon else 5
+    # Horizon selector (removed — T+5 only)
 
     # Date range selector
     st.sidebar.markdown("---")
@@ -292,19 +289,15 @@ def main():
     view_df = chart_df[mask].copy()
 
     # Predictions are pre-computed in the dataset by update_dataset.py
-    # If missing (shouldn't happen), compute inline
-    if "proj_T3" not in chart_df.columns:
+    # If missing (shouldn't happen), compute inline (T+5 only)
+    if "proj_T5" not in chart_df.columns:
         import pickle as pkl
         models_dir = PROJECT / "models"
         with open(models_dir / "model_metadata.pkl", "rb") as f:
             meta = pkl.load(f)
-        with open(models_dir / "model_delta_3d.pkl", "rb") as f:
-            m3d = pkl.load(f)
         with open(models_dir / "model_delta_5d.pkl", "rb") as f:
             m5d = pkl.load(f)
-        chart_df["pred_delta_3d"] = m3d.predict(chart_df[meta["features_3d"]].values)
         chart_df["pred_delta_5d"] = m5d.predict(chart_df[meta["features_5d"]].values)
-        chart_df["proj_T3"] = chart_df["guaiba_nivel_mean"] + chart_df["pred_delta_3d"]
         chart_df["proj_T5"] = chart_df["guaiba_nivel_mean"] + chart_df["pred_delta_5d"]
 
     # Filter view
@@ -316,7 +309,6 @@ def main():
         st.warning("Nenhum dado no período selecionado.")
         st.stop()
     last = view_df.iloc[-1]
-    last_proj_T3 = float(last["proj_T3"]) if "proj_T3" in last.index and not pd.isna(last.get("proj_T3")) else 0
     last_proj_T5 = float(last["proj_T5"]) if "proj_T5" in last.index and not pd.isna(last.get("proj_T5")) else 0
 
     current_nivel = float(last["guaiba_nivel_mean"])
@@ -335,7 +327,6 @@ def main():
     # Compute target dates
     last_date_ts = pd.Timestamp(last["date"])
     date_t0_str = last_date_ts.strftime("%d/%m/%Y")
-    date_t3_str = (last_date_ts + timedelta(days=3)).strftime("%d/%m/%Y")
     date_t5_str = (last_date_ts + timedelta(days=5)).strftime("%d/%m/%Y")
 
     # Trend
@@ -353,10 +344,9 @@ def main():
         elif d < -0.05: return "↓ descendo", "#4CAF50"
         else: return "→ estável", "#8899aa"
 
-    t3_text, t3_color = proj_trend(last_proj_T3, current_nivel)
     t5_text, t5_color = proj_trend(last_proj_T5, current_nivel)
 
-    col_sema, col_t3, col_t5 = st.columns(3)
+    col_sema, col_t5 = st.columns(2)
 
     with col_sema:
         ac = alert_color(current_alert)
@@ -367,18 +357,6 @@ def main():
             <div style="font-size:1.8em;font-weight:800;color:{ac}">{current_nivel:.2f}m</div>
             <div style="font-size:0.85em;color:{ac}">{alert_emoji(current_alert)} {current_alert}</div>
             <div style="font-size:0.75em;color:#8899aa;">{trend_text} ({delta_1d:+.3f}m)</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col_t3:
-        a3 = alert_level(last_proj_T3)
-        st.markdown(f"""
-        <div style="background:#1a1a2e;border:2px solid {alert_color(a3)};border-radius:12px;
-             padding:16px;text-align:center;">
-            <div style="font-size:0.8em;color:#8899aa;">PROJEÇÃO T+3 · {date_t3_str}</div>
-            <div style="font-size:1.8em;font-weight:800;color:{alert_color(a3)}">{last_proj_T3:.2f}m</div>
-            <div style="font-size:0.85em;color:{alert_color(a3)}">{alert_emoji(a3)} {a3}</div>
-            <div style="font-size:0.75em;color:#8899aa;">{t3_text} ({last_proj_T3 - current_nivel:+.3f}m)</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -399,8 +377,8 @@ def main():
     # ── Main Chart ──
     # Compute realized levels (actual level at D+N)
     view_df = view_df.copy()
-    view_df["realizado_TN"] = view_df["guaiba_nivel_mean"].shift(-horizon_days)
-    proj_col = "proj_T3" if horizon_days == 3 else "proj_T5"
+    view_df["realizado_TN"] = view_df["guaiba_nivel_mean"].shift(-5)
+    proj_col = "proj_T5"
 
     fig = go.Figure()
 
@@ -416,19 +394,19 @@ def main():
     # Realizado T+N — dark blue solid
     fig.add_trace(go.Scatter(
         x=view_df["date"], y=view_df["realizado_TN"],
-        mode="lines+markers", name=f"Realizado T+{horizon_days}",
+        mode="lines+markers", name=f"Realizado T+5",
         line=dict(color="#0D47A1", width=2.5),
         marker=dict(size=5, color="#0D47A1"),
-        hovertemplate=f"Real T+{horizon_days}: %{{y:.3f}}m<extra></extra>",
+        hovertemplate=f"Real T+5: %{{y:.3f}}m<extra></extra>",
     ))
 
     # Projeção T+N — light blue dashed
     if proj_col in view_df.columns:
         fig.add_trace(go.Scatter(
             x=view_df["date"], y=view_df[proj_col],
-            mode="lines", name=f"Projeção T+{horizon_days}",
+            mode="lines", name=f"Projeção T+5",
             line=dict(color="#64B5F6", width=1.5, dash="dot"),
-            hovertemplate=f"Proj T+{horizon_days}: %{{y:.3f}}m<extra></extra>",
+            hovertemplate=f"Proj T+5: %{{y:.3f}}m<extra></extra>",
         ))
 
     # Alert level lines
@@ -446,7 +424,7 @@ def main():
     fig.update_layout(
         height=560,
         title=dict(
-            text=f"Nível do Guaíba e Projeção T+{horizon_days}<br><sup style='color:#8899aa'>Comparação entre realizado e previsto pelo modelo · Período: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}</sup>",
+            text=f"Nível do Guaíba e Projeção T+5<br><sup style='color:#8899aa'>Comparação entre realizado e previsto pelo modelo · Período: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}</sup>",
             font=dict(color="#fff", size=16),
             x=0.01, xanchor="left",
         ),
@@ -673,7 +651,7 @@ def main():
 
     # ── Footer ──
     st.markdown("---")
-    st.caption(f"Sistema de previsão de enchentes do Rio Guaíba · Modelos: LightGBM (delta_3d) + CatBoost (delta_5d) · Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    st.caption(f"Sistema de previsão de enchentes do Rio Guaíba · Modelos: CatBoost (delta_5d) · Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 
 if __name__ == "__main__":
