@@ -515,6 +515,7 @@ def main():
 
     rows_html = ""
     n_extra = 0
+    status_counts = {"Normal": 0, "Elevado": 0, "Muito Alto": 0, "Extremo": 0, "CRÍTICO": 0}
     for grp in GROUP_ORDER:
         feats = grouped.get(grp, [])
         if not feats:
@@ -555,21 +556,32 @@ def main():
                 compass_abbr = deg_to_compass(val)
                 # Look up classification from wind_impact JSON
                 wi_class = "neutral"
-                wi_color = "#8899aa"
                 wi_impact = 0.0
-                if feat in wind_impact.get("classification", {}) and compass_abbr in wind_impact["classification"][feat]:
-                    ci = wind_impact["classification"][feat][compass_abbr]
-                    wi_class = ci.get("class", "neutral")
-                    wi_impact = ci.get("avg_impact", 0.0)
-                    color_map = {"better": "#4CAF50", "neutral": "#8899aa", "worse": "#F44336"}
-                    wi_color = color_map.get(wi_class, "#8899aa")
-                sign = "+" if wi_impact >= 0 else ""
-                val_html = f'<span style="color:{wi_color};font-weight:700;">{arrow} {compass_pt} ({sign}{wi_impact:.2f}m)</span>'
-                pct_html = '<span style="color:#666;">—</span>'
+                try:
+                    if feat in wind_impact.get("classification", {}) and compass_abbr in wind_impact["classification"][feat]:
+                        ci = wind_impact["classification"][feat][compass_abbr]
+                        wi_class = ci.get("class", "neutral")
+                        wi_impact = ci.get("avg_impact", 0.0)
+                except Exception:
+                    pass
+                wi_color_map = {"better": "#4CAF50", "neutral": "#8899aa", "worse": "#F44336"}
+                wi_label_map = {"better": "🟢 Favorável", "neutral": "⚪ Neutro", "worse": "🔴 Desfavorável"}
+                wi_color = wi_color_map.get(wi_class, "#8899aa")
+                wi_label = wi_label_map.get(wi_class, "⚪ Neutro")
+                val_html = f'<span style="color:#fff;font-weight:500;">{arrow} {compass_pt}</span>'
+                pct_html = f'<span style="background:{wi_color}22;color:{wi_color};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;">{wi_label}</span>'
                 bar_html = '<span style="color:#666;">—</span>'
+                # Count wind direction status for summary
+                if wi_class == "better":
+                    status_counts["Normal"] += 1
+                elif wi_class == "worse":
+                    status_counts["Extremo"] += 1
+                else:
+                    status_counts["Elevado"] += 1
             else:
                 val_html = f'{val:.3f}'
-                pct_html = f'<span style="background:{pc}22;color:{pc};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;{pulse}">{pct:.1f}% — {pl}</span>'
+                pct_html = f'<span style="background:{pc}22;color:{pc};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;{pulse}">{pl}</span>'
+                status_counts[pl] = status_counts.get(pl, 0) + 1
                 bar_html = f'''<div style="width:120px;height:10px;background:#1a1a2e;border-radius:5px;overflow:hidden;border:1px solid #2a2a4a;">
                     <div style="width:{min(pct,100):.0f}%;height:100%;background:{pc};border-radius:5px;"></div>
                 </div>'''
@@ -586,6 +598,18 @@ def main():
             <td>{bar_html}</td>
         </tr>"""
 
+    # Build summary badges
+    total_vars = sum(status_counts.values())
+    _sum_emoji = {"Normal": "🟢", "Elevado": "🟡", "Muito Alto": "🟠", "Extremo": "🔴", "CRÍTICO": "💀"}
+    _sum_color = {"Normal": "#4CAF50", "Elevado": "#F9A825", "Muito Alto": "#FF9800", "Extremo": "#F44336", "CRÍTICO": "#B71C1C"}
+    _sum_parts = []
+    for _sn in ["Normal", "Elevado", "Muito Alto", "Extremo", "CRÍTICO"]:
+        _sc = status_counts.get(_sn, 0)
+        _sp = (_sc / total_vars * 100) if total_vars > 0 else 0
+        _sum_parts.append(f'<span style="background:{_sum_color[_sn]}22;color:{_sum_color[_sn]};padding:4px 10px;border-radius:8px;font-size:0.85em;font-weight:600;">{_sum_emoji[_sn]} {_sn}: {_sc} ({_sp:.0f}%)</span>')
+    summary_html = ' <span style="color:#555;">·</span> '.join(_sum_parts)
+    st.markdown(f'<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:14px 18px;margin-bottom:10px;text-align:center;">{summary_html}</div>', unsafe_allow_html=True)
+
     st.markdown(f"""
     <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:16px;padding:20px;overflow-x:auto;">
     <table style="width:100%;border-collapse:collapse;font-size:0.88em;">
@@ -594,7 +618,7 @@ def main():
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;">Variável</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Modelo</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Valor</th>
-            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Percentil</th>
+            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Status</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Barra</th>
         </tr>
     </thead>
