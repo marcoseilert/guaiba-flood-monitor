@@ -29,7 +29,6 @@ st.set_page_config(
 
 PROJECT = Path(__file__).resolve().parent
 DATASET_PATH = PROJECT / "data" / "processed" / "dataset_historico.parquet"
-DEV_PATH = PROJECT / "data" / "processed" / "dataset_dev_v2.parquet"
 UPDATE_SCRIPT = PROJECT / "update_dataset.py"
 
 # ── Feature definitions ──────────────────────────────────────────────────────
@@ -159,10 +158,10 @@ def load_historico():
     df["date"] = pd.to_datetime(df["date"])
     return df
 
-@st.cache_data(ttl=3600, show_spinner="Carregando dados DEV...")
+@st.cache_data(ttl=3600, show_spinner="Carregando dados históricos para estatísticas...")
 def load_dev_data():
-    """Load DEV dataset for statistics."""
-    df = pd.read_parquet(DEV_PATH)
+    """Load historical dataset for statistics (percentiles)."""
+    df = pd.read_parquet(DATASET_PATH)
     df["date"] = pd.to_datetime(df["date"])
     if "guaiba_delta1" not in df.columns:
         df["guaiba_delta1"] = df["guaiba_nivel_mean"].diff(1)
