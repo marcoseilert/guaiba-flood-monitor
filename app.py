@@ -17,6 +17,7 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import json
+import pickle as pkl
 import time
 
 # ── Config ───────────────────────────────────────────────────────────────────
@@ -48,6 +49,12 @@ FEATURES_5D = [
 ]
 ALL_MODEL_FEATURES = sorted(set(FEATURES_3D + FEATURES_5D))
 EXTRA_KEYS = {"guaiba_nivel_mean", "chuva_total_raw", "guaiba_delta1", "guaiba_delta3"}
+OFF_MODEL_1D = {
+    "gravatai_sl_chuva", "mucum_wind_dir_deg", "campo_bom_wind_dir_deg",
+    "gravatai_sl_nivel_max", "encantado_precip_mm", "cachoeira_do_sul_wind_max_kmh",
+    "cachoeira_do_sul_precip_mm", "catsul_nivel_max", "taquari_mucum_chuva_roll3",
+    "rio_grande_v_wind",
+}
 
 FEATURE_META = {
     # ── Chuva ──
@@ -83,6 +90,17 @@ FEATURE_META = {
     "dias_chuvosos_14d":         {"desc": "Dias com chuva nos últimos 14 dias", "interp": "0-14: frequência de chuva — proxy de saturação do solo", "group": "Saturação do solo", "type": "other"},
     # ── Contexto (extra — not in models) ──
     "chuva_total_raw":           {"desc": "Chuva total hoje em todas as bacias (mm)", "interp": "Soma da chuva de hoje em todas as 8 estações", "group": "Contexto", "type": "other"},
+    # ── Off-model (delta_1d SFS features) ──
+    "gravatai_sl_chuva":           {"desc": "Chuva em Gravataí/São Leopoldo (mm)", "interp": "Chuva na bacia dos Sinos — contribuição direta ao Guaíba", "group": "Chuva", "type": "off_model"},
+    "encantado_precip_mm":         {"desc": "Precipitação em Encantado (mm)", "interp": "Precipitação no vale do Taquari — propagação em ~3 dias", "group": "Chuva", "type": "off_model"},
+    "cachoeira_do_sul_precip_mm":  {"desc": "Precipitação em Cachoeira do Sul (mm)", "interp": "Precipitação na região intermediária do Jacuí", "group": "Chuva", "type": "off_model"},
+    "taquari_mucum_chuva_roll3":   {"desc": "Chuva acumulada em 3 dias em Muçum (mm)", "interp": "Chuva persistente no Taquari — proxy de propagação", "group": "Chuva", "type": "off_model"},
+    "mucum_wind_dir_deg":          {"desc": "Direção do vento em Muçum (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "off_model"},
+    "campo_bom_wind_dir_deg":      {"desc": "Direção do vento em Campo Bom (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "off_model"},
+    "cachoeira_do_sul_wind_max_kmh": {"desc": "Rajada máxima em Cachoeira do Sul (km/h)", "interp": "Ventos fortes na região intermediária do Jacuí", "group": "Vento (velocidade)", "type": "off_model"},
+    "rio_grande_v_wind":           {"desc": "Vento sul em Rio Grande (m/s)", "interp": "Positivo=vento sul → represamento na Lagoa dos Patos", "group": "Vento (velocidade)", "type": "off_model"},
+    "gravatai_sl_nivel_max":       {"desc": "Nível máximo em Gravataí/São Leopoldo (m)", "interp": "Pico de nível na bacia dos Sinos — contribuição ao Guaíba", "group": "Nível", "type": "off_model"},
+    "catsul_nivel_max":            {"desc": "Nível máximo no Terminal CATSUL (m)", "interp": "Pico de nível no Guaíba a jusante", "group": "Nível", "type": "off_model"},
 }
 
 
@@ -208,6 +226,36 @@ def main():
     # Load data
     historico = load_historico()
     wind_impact = json.loads((PROJECT / "data" / "processed" / "wind_direction_impact.json").read_text())
+
+    # Load models for feature importance
+    models_dir = PROJECT / "models"
+    importance_map = {}
+    try:
+        with open(models_dir / "model_metadata.pkl", "rb") as f:
+            meta = pkl.load(f)
+        features_3d = meta.get("features_3d", FEATURES_3D)
+        features_5d = meta.get("features_5d", FEATURES_5D)
+
+        with open(models_dir / "model_delta_3d.pkl", "rb") as f:
+            model_3d = pkl.load(f)
+        with open(models_dir / "model_delta_5d.pkl", "rb") as f:
+            model_5d = pkl.load(f)
+
+        imp_3d = dict(zip(features_3d, model_3d.feature_importances_))
+        imp_5d = dict(zip(features_5d, model_5d.get_feature_importance()))
+
+        # Combine: use max importance across models
+        all_imp_feats = set(imp_3d.keys()) | set(imp_5d.keys())
+        raw_imp = {}
+        for feat in all_imp_feats:
+            raw_imp[feat] = max(imp_3d.get(feat, 0), imp_5d.get(feat, 0))
+
+        # Normalize to 0-100
+        max_imp = max(raw_imp.values()) if raw_imp else 1
+        for feat, val in raw_imp.items():
+            importance_map[feat] = (val / max_imp) * 100 if max_imp > 0 else 0
+    except Exception:
+        importance_map = {}
     if historico is None:
         st.sidebar.warning("⚠️ Dataset não encontrado!")
         if st.sidebar.button("🔄 Gerar dataset histórico", type="primary"):
@@ -291,7 +339,6 @@ def main():
     # Predictions are pre-computed in the dataset by update_dataset.py
     # If missing (shouldn't happen), compute inline (T+5 only)
     if "proj_T5" not in chart_df.columns:
-        import pickle as pkl
         models_dir = PROJECT / "models"
         with open(models_dir / "model_metadata.pkl", "rb") as f:
             meta = pkl.load(f)
@@ -497,7 +544,7 @@ def main():
     }
 
     # Collect all features with their metadata, bucketed by group
-    all_feats = sorted(set(ALL_MODEL_FEATURES) | EXTRA_KEYS)
+    all_feats = sorted(set(ALL_MODEL_FEATURES) | EXTRA_KEYS | OFF_MODEL_1D)
     grouped = {}
     for feat in all_feats:
         meta = FEATURE_META.get(feat)
@@ -524,17 +571,23 @@ def main():
             pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
             cls = percentile_class(pct)
 
-            models = []
-            if feat in FEATURES_3D: models.append("3d")
-            if feat in FEATURES_5D: models.append("5d")
-            model_str = " + ".join(models) if models else "—"
-
-            is_extra = feat in EXTRA_KEYS
+            is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D
             if is_extra: n_extra += 1
 
             row_bg = "background:rgba(255,152,0,0.04);" if is_extra else ""
             desc_style = "font-style:italic;color:#aaa;" if is_extra else "color:#ddd;"
-            model_bg = "background:rgba(255,152,0,0.15);color:#FF9800;" if is_extra else "background:rgba(33,150,243,0.15);color:#2196F3;"
+
+            # Importance bar
+            if not is_extra and feat in importance_map and importance_map[feat] > 0:
+                imp_pct = importance_map[feat]
+                imp_html = f'''<div style="display:flex;align-items:center;gap:6px;">
+                    <div style="width:60px;height:10px;background:#1a1a2e;border-radius:5px;overflow:hidden;border:1px solid #2a2a4a;">
+                        <div style="width:{imp_pct:.0f}%;height:100%;background:#2196F3;border-radius:5px;"></div>
+                    </div>
+                    <span style="color:#64B5F6;font-size:0.8em;font-weight:600;">{imp_pct:.0f}%</span>
+                </div>'''
+            else:
+                imp_html = '<span style="color:#555;font-size:0.8em;">—</span>'
 
             pct_colors = {"normal":"#4CAF50","elevated":"#F9A825","very_high":"#FF9800","extreme":"#F44336","critical":"#B71C1C"}
             pct_labels = {"normal":"Normal","elevated":"Elevado","very_high":"Muito Alto","extreme":"Extremo","critical":"CRÍTICO"}
@@ -543,7 +596,7 @@ def main():
             pulse = "animation:pulse 1.5s infinite;" if cls == "critical" else ""
 
             # Wind direction: show arrow + compass + impact classification from JSON
-            if ftype == "wind_dir":
+            if ftype == "wind_dir" or (ftype == "off_model" and "wind_dir" in feat):
                 arrow = deg_to_arrow(val)
                 compass_pt = deg_to_compass_pt(val)
                 compass_abbr = deg_to_compass(val)
@@ -585,9 +638,9 @@ def main():
                 <div style="font-weight:500;{desc_style}">{meta['desc']}</div>
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">{meta['interp']}</div>
             </td>
-            <td><span style="{model_bg}padding:2px 8px;border-radius:4px;font-size:0.8em;">{model_str}</span></td>
             <td style="font-weight:600;">{val_html}</td>
             <td>{pct_html}</td>
+            <td>{imp_html}</td>
             <td>{bar_html}</td>
         </tr>"""
 
@@ -609,16 +662,16 @@ def main():
     <thead>
         <tr style="border-bottom:2px solid #2a2a4a;">
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;">Variável</th>
-            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Modelo</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Valor</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Status</th>
+            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Importância</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Barra</th>
         </tr>
     </thead>
     <tbody>{rows_html}</tbody>
     </table>
     <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:0.82em;color:#8899aa;border-top:1px solid #2a2a4a;">
-        ⚠️ As últimas {n_extra} linhas (em itálico, fundo levemente alaranjado) <b>NÃO fazem parte dos modelos</b> — são incluídas apenas como contexto adicional. A coluna "Modelo" mostra "—" para essas variáveis.
+        ⚠️ Variáveis em itálico (fundo levemente alaranjado) <b>NÃO fazem parte dos modelos 3d/5d</b> — são incluídas como contexto adicional (delta_1d SFS ou variáveis de referência). A coluna "Importância" mostra "—" para essas variáveis.
     </div>
     </div>
     """, unsafe_allow_html=True)
