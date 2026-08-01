@@ -1,0 +1,190 @@
+{
+  "results": {
+    "encantado_wind_dir_deg": {
+      "N": {
+        "avg_impact_3d": -0.0027,
+        "avg_impact_5d": 0.0243,
+        "std_3d": 0.0525,
+        "std_5d": 0.0539
+      },
+      "NE": {
+        "avg_impact_3d": -0.0159,
+        "avg_impact_5d": 0.0058,
+        "std_3d": 0.0531,
+        "std_5d": 0.0445
+      },
+      "E": {
+        "avg_impact_3d": -0.0341,
+        "avg_impact_5d": -0.0159,
+        "std_3d": 0.0457,
+        "std_5d": 0.0402
+      },
+      "SE": {
+        "avg_impact_3d": -0.0334,
+        "avg_impact_5d": -0.0288,
+        "std_3d": 0.0462,
+        "std_5d": 0.0361
+      },
+      "S": {
+        "avg_impact_3d": -0.042,
+        "avg_impact_5d": -0.0293,
+        "std_3d": 0.0447,
+        "std_5d": 0.0348
+      },
+      "SW": {
+        "avg_impact_3d": -0.0154,
+        "avg_impact_5d": -0.0128,
+        "std_3d": 0.0499,
+        "std_5d": 0.0366
+      },
+      "W": {
+        "avg_impact_3d": 0.0221,
+        "avg_impact_5d": 0.0266,
+        "std_3d": 0.057,
+        "std_5d": 0.0414
+      },
+      "NW": {
+        "avg_impact_3d": 0.0707,
+        "avg_impact_5d": 0.0462,
+        "std_3d": 0.0554,
+        "std_5d": 0.0465
+      }
+    },
+    "cachoeira_do_sul_wind_dir_deg": {
+      "N": {
+        "avg_impact_3d": 0.06,
+        "avg_impact_5d": 0.0754,
+        "std_3d": 0.0548,
+        "std_5d": 0.0598
+      },
+      "NE": {
+        "avg_impact_3d": 0.0512,
+        "avg_impact_5d": 0.0597,
+        "std_3d": 0.0508,
+        "std_5d": 0.0596
+      },
+      "E": {
+        "avg_impact_3d": 0.0089,
+        "avg_impact_5d": 0.0355,
+        "std_3d": 0.0434,
+        "std_5d": 0.0548
+      },
+      "SE": {
+        "avg_impact_3d": -0.009,
+        "avg_impact_5d": -0.0241,
+        "std_3d": 0.0288,
+        "std_5d": 0.0335
+      },
+      "S": {
+        "avg_impact_3d": -0.0128,
+        "avg_impact_5d": -0.0292,
+        "std_3d": 0.0322,
+        "std_5d": 0.0342
+      },
+      "SW": {
+        "avg_impact_3d": -0.0141,
+        "avg_impact_5d": -0.0268,
+        "std_3d": 0.0333,
+        "std_5d": 0.0344
+      },
+      "W": {
+        "avg_impact_3d": -0.0052,
+        "avg_impact_5d": -0.0085,
+        "std_3d": 0.0346,
+        "std_5d": 0.0352
+      },
+      "NW": {
+        "avg_impact_3d": 0.0167,
+        "avg_impact_5d": 0.0077,
+        "std_3d": 0.0402,
+        "std_5d": 0.0412
+      }
+    }
+  },
+  "classification": {
+    "encantado_wind_dir_deg": {
+      "N": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0108
+      },
+      "NE": {
+        "class": "neutral",
+        "color": "gray",
+        "avg_impact": -0.0051
+      },
+      "E": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.025
+      },
+      "SE": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.0311
+      },
+      "S": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.0357
+      },
+      "SW": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.0141
+      },
+      "W": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0244
+      },
+      "NW": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0585
+      }
+    },
+    "cachoeira_do_sul_wind_dir_deg": {
+      "N": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0677
+      },
+      "NE": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0554
+      },
+      "E": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0222
+      },
+      "SE": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.0165
+      },
+      "S": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.021
+      },
+      "SW": {
+        "class": "better",
+        "color": "green",
+        "avg_impact": -0.0204
+      },
+      "W": {
+        "class": "neutral",
+        "color": "gray",
+        "avg_impact": -0.0069
+      },
+      "NW": {
+        "class": "worse",
+        "color": "red",
+        "avg_impact": 0.0122
+      }
+    }
+  }
+}

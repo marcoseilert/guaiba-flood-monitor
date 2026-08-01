@@ -1,0 +1,66 @@
+# Raw data
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+catboost_info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Temp
+*.tmp
+*.log
+
+# JSON files (except wind impact)
+*.json
+!data/processed/wind_direction_impact.json
+
+# PNG files
+*.png
+
+# Test/exploratory scripts
+test_*.py
+testar_*.py
+verificar_*.py
+buscar_*.py
+fim_serie_*.py
+investigar_*.py
+mapping_*.py
+
+# Legacy build scripts
+build_dataset.py
+build_prd_dataset.py
+build_dashboard.py
+train_models.py
+sfs_feature_selection.py
+dashboard.html
+
+# Exclude old datasets
+data/processed/dataset_dev*.parquet
+data/processed/dataset_oot*.parquet
+data/processed/dataset_FULL*.parquet
+data/processed/dataset_PRD*.parquet
+data/processed/sfs_results*.json
+data/processed/model_comparison*.json
+data/processed/feature_*.csv
+data/processed/feature_*.txt
+data/processed/data_quality_report.txt
+data/processed/oot_comparison.json
+data/processed/sfs_selected_features*.txt
+data/processed/previsoes_julho_2026.png
+
+# Scripts folder
+scripts/
