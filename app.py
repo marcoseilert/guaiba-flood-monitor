@@ -65,9 +65,9 @@ FEATURE_META = {
     "cachoeira_do_sul_wind_dir_deg":   {"desc": "Direção do vento em Cachoeira do Sul (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "wind_dir"},
     # ── Vento (velocidade) ──
     "feliz_wind_max_kmh":        {"desc": "Rajada máxima de vento em Feliz (km/h)", "interp": "Ventos fortes podem causar represamento no Guaíba", "group": "Vento (velocidade)", "type": "wind_speed"},
-    "mostardas_v_wind":          {"desc": "Vento sul em Mostardas — hoje (m/s)", "interp": "Negativo=sul → represamento imediato", "group": "Vento (velocidade)", "type": "wind_speed"},
-    "mostardas_v_wind_roll2":    {"desc": "Vento sul em Mostardas — média 2 dias (m/s)", "interp": "Negativo=sul forte → empurra Lagoa dos Patos para dentro do Guaíba (represamento)", "group": "Vento (velocidade)", "type": "wind_speed"},
-    "mostardas_v_wind_roll3":    {"desc": "Vento sul em Mostardas — média 3 dias (m/s)", "interp": "Negativo=sul persistente → represamento acumulado na Lagoa dos Patos", "group": "Vento (velocidade)", "type": "wind_speed"},
+    "mostardas_v_wind":          {"desc": "Vento sul em Mostardas — hoje (m/s)", "interp": "Positivo=vento sul → represamento. Negativo=vento norte → drenagem", "group": "Vento (velocidade)", "type": "wind_speed"},
+    "mostardas_v_wind_roll2":    {"desc": "Vento sul em Mostardas — média 2 dias (m/s)", "interp": "Positivo=vento sul → represamento (empurra Lagoa dos Patos para o Guaíba). Negativo=vento norte → drenagem", "group": "Vento (velocidade)", "type": "wind_speed"},
+    "mostardas_v_wind_roll3":    {"desc": "Vento sul em Mostardas — média 3 dias (m/s)", "interp": "Positivo=vento sul persistente → represamento acumulado. Negativo=vento norte → drenagem", "group": "Vento (velocidade)", "type": "wind_speed"},
     "estrela_wind_max_kmh":      {"desc": "Rajada máxima de vento em Estrela (km/h)", "interp": "Ventos fortes no vale do Taquari", "group": "Vento (velocidade)", "type": "wind_speed"},
     # ── Nível ──
     "taquari_mucum_delta3":      {"desc": "Variação do nível em Muçum em 3 dias (m)", "interp": "Se positivo, o rio Taquari está subindo — água a caminho do Guaíba", "group": "Nível", "type": "level"},
