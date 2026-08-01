@@ -232,10 +232,10 @@ def build_all_features(df):
     if "guaiba_nivel_mean" in df.columns:
         df["inter_chuva_x_nivel"] = df["chuva_total_raw"] * df["guaiba_nivel_mean"]
         df["inter_chuva7d_x_nivel"] = df["chuva_total_acc_7d"] * df["guaiba_nivel_mean"]
-        guaiba_delta1 = df["guaiba_nivel_mean"].diff(1)
-        guaiba_delta3 = df["guaiba_nivel_mean"].diff(3)
-        df["inter_chuva_x_delta1"] = df["chuva_total_raw"] * guaiba_delta1
-        df["inter_chuva_x_delta3"] = df["chuva_total_raw"] * guaiba_delta3
+        df["guaiba_delta1"] = df["guaiba_nivel_mean"].diff(1)
+        df["guaiba_delta3"] = df["guaiba_nivel_mean"].diff(3)
+        df["inter_chuva_x_delta1"] = df["chuva_total_raw"] * df["guaiba_delta1"]
+        df["inter_chuva_x_delta3"] = df["chuva_total_raw"] * df["guaiba_delta3"]
 
     df["chuva_ratio_3d_30d"] = df["chuva_total_acc_3d"] / (df["chuva_total_acc_30d"] + 1e-6)
     df["chuva_ratio_7d_30d"] = df["chuva_total_acc_7d"] / (df["chuva_total_acc_30d"] + 1e-6)
