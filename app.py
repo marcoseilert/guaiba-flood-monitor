@@ -253,29 +253,36 @@ def main():
         st.session_state.start_date = max(min_date, max_date - timedelta(days=90))
     if "end_date" not in st.session_state:
         st.session_state.end_date = max_date
+    if "slider_start" not in st.session_state:
+        st.session_state.slider_start = st.session_state.start_date
+    if "slider_end" not in st.session_state:
+        st.session_state.slider_end = st.session_state.end_date
+
+    # Callbacks for sync
+    def on_slider_change():
+        st.session_state.start_date = st.session_state.slider_range[0]
+        st.session_state.end_date = st.session_state.slider_range[1]
+
+    def on_input_change():
+        if "d1" in st.session_state and "d2" in st.session_state:
+            st.session_state.start_date = st.session_state.d1
+            st.session_state.end_date = st.session_state.d2
 
     # Date range slider
-    selected_range = st.sidebar.slider(
+    st.sidebar.slider(
         "📅 Período (arraste)",
         min_value=min_date,
         max_value=max_date,
         value=(st.session_state.start_date, st.session_state.end_date),
         format="DD/MM/YYYY",
+        key="slider_range",
+        on_change=on_slider_change,
     )
-    # Sync slider → session state
-    st.session_state.start_date = selected_range[0]
-    st.session_state.end_date = selected_range[1]
 
-    # Date input boxes (synced with slider)
+    # Date input boxes
     col_d1, col_d2 = st.sidebar.columns(2)
-    d1 = col_d1.date_input("De", value=st.session_state.start_date, min_value=min_date, max_value=max_date, key="d1", format="DD/MM/YYYY")
-    d2 = col_d2.date_input("Até", value=st.session_state.end_date, min_value=min_date, max_value=max_date, key="d2", format="DD/MM/YYYY")
-
-    # Sync date inputs → session state (only if changed)
-    if d1 != st.session_state.start_date:
-        st.session_state.start_date = d1
-    if d2 != st.session_state.end_date:
-        st.session_state.end_date = d2
+    col_d1.date_input("De", value=st.session_state.start_date, min_value=min_date, max_value=max_date, key="d1", format="DD/MM/YYYY", on_change=on_input_change)
+    col_d2.date_input("Até", value=st.session_state.end_date, min_value=min_date, max_value=max_date, key="d2", format="DD/MM/YYYY", on_change=on_input_change)
 
     start_date = st.session_state.start_date
     end_date = st.session_state.end_date
