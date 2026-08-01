@@ -68,6 +68,3 @@ streamlit run app.py
 python update_dataset.py
 ```
 
-## 📄 Licença
-
-Uso interno — Defesa Civil de Porto Alegre.
