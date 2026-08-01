@@ -469,15 +469,23 @@ def main():
     else:
         chuva_hoje = chuva_3d = chuva_7d = 0
 
+    def rain_icon(mm):
+        if mm <= 0: return "☀️"
+        elif mm <= 5: return "⛅"
+        elif mm <= 20: return "🌤️"
+        elif mm <= 50: return "🌧️"
+        else: return "⛈️"
+
     st.markdown(f"### 🌧️ Precipitação")
     st.caption(f"Soma da chuva em todas as 8 estações monitoradas · Referência: {date_t0_str}")
     rc1, rc2, rc3 = st.columns(3)
     for col, val, label, sub in [(rc1, chuva_hoje, "Hoje", "Chuva em 24h"), (rc2, chuva_3d, "Acumulado 3d", "Soma últimos 3 dias"), (rc3, chuva_7d, "Acumulado 7d", "Soma últimos 7 dias")]:
         c = rain_color_mm(val)
+        icon = rain_icon(val)
         col.markdown(f"""
         <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;
              padding:16px 20px;display:flex;align-items:center;gap:14px;">
-            <div style="font-size:2em;">🌧️</div>
+            <div style="font-size:2em;">{icon}</div>
             <div>
                 <div style="font-size:1.8em;font-weight:700;color:{c}">{val:.1f} mm</div>
                 <div style="font-size:0.85em;color:#ccc;">{label}</div>
