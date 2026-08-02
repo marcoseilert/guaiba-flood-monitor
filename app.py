@@ -712,8 +712,22 @@ def main():
                 return (2, 0)  # N/A last
             feats.sort(key=sort_key)
         else:
-            # Default sort: model features first by importance desc, then off-model
-            feats.sort(key=lambda x: (x[2], -x[1]))
+            # Default sort: by status severity (critical first), then by contribution/importance
+            severity_order = {"CRÍTICO": 0, "Extremo": 1, "Muito Alto": 2, "Elevado": 3, "Normal": 4}
+            def sort_key(x):
+                feat_name = x[0]
+                is_extra = x[2]
+                contrib = x[3]
+                # Compute status for sorting
+                val_tmp = float(last[feat_name]) if feat_name in last.index and not pd.isna(last[feat_name]) else 0
+                col_tmp = dev_df[feat_name].dropna() if feat_name in dev_df.columns else pd.Series(dtype=float)
+                pct_tmp = float((col_tmp <= val_tmp).mean() * 100) if len(col_tmp) > 0 else 0
+                cls_tmp = percentile_class(pct_tmp)
+                sev = severity_order.get(cls_tmp, 5)
+                # LogReg features with positive contribution go first
+                is_lr = feat_name in SFS_LOGREG and contrib is not None and contrib > 0
+                return (0 if is_lr else 1, sev, -(contrib or 0))
+            feats.sort(key=sort_key)
 
         grp_bg = GROUP_COLORS.get(grp, "rgba(158,158,158,0.08)")
         rows_html += f'<tr><td colspan="5" style="background:{grp_bg};padding:8px 10px;font-weight:700;font-size:0.9em;color:#bbb;letter-spacing:0.5px;border-top:1px solid #2a2a4a;">{grp}</td></tr>'
