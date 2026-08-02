@@ -54,6 +54,9 @@ OFF_MODEL_1D = {
     "gravatai_sl_nivel_max", "encantado_precip_mm", "cachoeira_do_sul_wind_max_kmh",
     "cachoeira_do_sul_precip_mm", "catsul_nivel_max", "taquari_mucum_chuva_roll3",
     "rio_grande_v_wind",
+    # SFS LogReg+OptBin exclusive features
+    "sinos_cb_chuva_roll3", "sinos_sl_nivel_mean_lag3", "represamento_3d",
+    "rio_grande_v_wind_roll2", "jacui_rp_chuva_roll3", "sinos_sl_nivel_mean_lag1",
 }
 # SFS LogReg+OptBin features (binary classification)
 SFS_LOGREG = {
