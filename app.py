@@ -670,24 +670,7 @@ def main():
     # Count contributing features
     n_contributing = sum(1 for v in feature_contributions.values() if v["contribution"] > 0)
 
-    # Banner
-    if is_elevated_risk:
-        banner_bg = "rgba(244,67,54,0.08)"
-        banner_border = "#F44336"
-        banner_text = f"⚠️ Risco elevado detectado — variáveis-chave identificadas · P(extremo) = {current_prob*100:.1f}%"
-    else:
-        banner_bg = "rgba(76,175,80,0.08)"
-        banner_border = "#4CAF50"
-        banner_text = "✅ Cenário normal — nenhuma variável em regime extremo"
 
-    st.markdown(f"""
-    <div style="background:{banner_bg};border:1px solid {banner_border};border-radius:10px;
-         padding:12px 18px;margin-bottom:12px;font-size:0.9em;color:{banner_border};">
-        {banner_text}
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Determine top 3 contributing features for highlighting
     top3_contrib = set()
     if is_elevated_risk and feature_contributions:
         sorted_contribs = sorted(
