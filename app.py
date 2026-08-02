@@ -468,7 +468,7 @@ def main():
     st.markdown(f"""
     <div style="background:#1a1a2e;border:2px solid {risk_col};border-radius:12px;
          padding:16px;text-align:center;max-width:400px;margin:0 auto;{risk_anim}">
-        <div style="font-size:0.8em;color:#8899aa;">PROBABILIDADE DE Δ > 1m EM 5 DIAS · {date_t0_str}</div>
+        <div style="font-size:0.8em;color:#8899aa;">PROBABILIDADE DE Δ > 1m EM T+5 · {date_t0_str}</div>
         <div style="font-size:1.8em;font-weight:800;color:{risk_col}">{prob_pct:.1f}%</div>
         <div style="font-size:0.85em;color:{risk_col}">{risk_emo} {risk_cls}</div>
         <div style="font-size:0.75em;color:#8899aa;">P(Δ5d > 1m)</div>
