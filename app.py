@@ -19,6 +19,9 @@ from pathlib import Path
 import json
 import pickle as pkl
 import time
+from optbinning import OptimalBinning
+from sklearn.linear_model import LogisticRegression
+from sklearn.impute import SimpleImputer
 
 # ── Config ───────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -67,6 +70,8 @@ FEATURE_META = {
     "cai_pm_chuva_roll3":        {"desc": "Chuva acumulada em 3 dias no Caí (mm)", "interp": "Chuva no Caí — contribuição direta ao Guaíba", "group": "Chuva", "type": "rain"},
     "sinos_sl_chuva_roll3":      {"desc": "Chuva acumulada em 3 dias nos Sinos (mm)", "interp": "Chuva persistente na bacia dos Sinos", "group": "Chuva", "type": "rain"},
     "catsul_chuva":              {"desc": "Chuva no Terminal CATSUL (mm)", "interp": "Chuva direta na região do Guaíba a jusante", "group": "Chuva", "type": "rain"},
+    "sinos_cb_chuva_roll3":      {"desc": "Chuva acumulada em 3 dias em Campo Bom/Sinos (mm)", "interp": "Chuva na sub-bacia dos Sinos — Campo Bom", "group": "Chuva", "type": "rain"},
+    "jacui_rp_chuva_roll3":      {"desc": "Chuva acumulada em 3 dias no Jacuí — Rio Pardo (mm)", "interp": "Chuva recente no Jacuí — contribuição direta ao Guaíba", "group": "Chuva", "type": "rain"},
     # ── Vento (direção) ──
     "encantado_wind_dir_deg":          {"desc": "Direção do vento em Encantado (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "wind_dir"},
     "cachoeira_do_sul_wind_dir_deg":   {"desc": "Direção do vento em Cachoeira do Sul (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "wind_dir"},
@@ -76,11 +81,15 @@ FEATURE_META = {
     "mostardas_v_wind_roll2":    {"desc": "Vento sul em Mostardas — média 2 dias (m/s)", "interp": "Positivo=vento sul → represamento (empurra Lagoa dos Patos para o Guaíba). Negativo=vento norte → drenagem", "group": "Vento (velocidade)", "type": "wind_speed"},
     "mostardas_v_wind_roll3":    {"desc": "Vento sul em Mostardas — média 3 dias (m/s)", "interp": "Positivo=vento sul persistente → represamento acumulado. Negativo=vento norte → drenagem", "group": "Vento (velocidade)", "type": "wind_speed"},
     "estrela_wind_max_kmh":      {"desc": "Rajada máxima de vento em Estrela (km/h)", "interp": "Ventos fortes no vale do Taquari", "group": "Vento (velocidade)", "type": "wind_speed"},
+    "rio_grande_v_wind_roll2":   {"desc": "Vento sul em Rio Grande — média 2 dias (m/s)", "interp": "Positivo=vento sul → represamento na Lagoa dos Patos. Média de 2 dias", "group": "Vento (velocidade)", "type": "wind_speed"},
+    "represamento_3d":           {"desc": "Índice de represamento — 3 dias", "interp": "Acumulado de efeito de vento sul sobre o Guaíba em 3 dias", "group": "Vento (velocidade)", "type": "other"},
     # ── Nível ──
     "taquari_mucum_delta3":      {"desc": "Variação do nível em Muçum em 3 dias (m)", "interp": "Se positivo, o rio Taquari está subindo — água a caminho do Guaíba", "group": "Nível", "type": "level"},
     "sinos_sl_nivel_mean":       {"desc": "Nível do rio Sinos em São Leopoldo (m)", "interp": "Nível alto indica contribuição da bacia dos Sinos", "group": "Nível", "type": "level"},
     "catsul_nivel_mean_lag5":    {"desc": "Nível no Terminal CATSUL — 5 dias atrás (m)", "interp": "Nível passado no Guaíba a jusante — indica tendência de longo prazo", "group": "Nível", "type": "level"},
     "sinos_sl_nivel_mean_lag5":  {"desc": "Nível do Sinos em São Leopoldo — 5 dias atrás (m)", "interp": "Nível passado indica propagação lenta da cheia", "group": "Nível", "type": "level"},
+    "sinos_sl_nivel_mean_lag3":  {"desc": "Nível do Sinos em São Leopoldo — 3 dias atrás (m)", "interp": "Nível com lag intermediário — captura propagação da cheia", "group": "Nível", "type": "level"},
+    "sinos_sl_nivel_mean_lag1":  {"desc": "Nível do Sinos em São Leopoldo — 1 dia atrás (m)", "interp": "Nível recente — reação imediata da bacia dos Sinos", "group": "Nível", "type": "level"},
     "jacui_rp_nivel_mean_lag7":  {"desc": "Nível do Jacuí em Rio Pardo — 7 dias atrás (m)", "interp": "Nível com longo lag — captura a propagação lenta do Jacuí", "group": "Nível", "type": "level"},
     "guaiba_nivel_mean":         {"desc": "Nível atual do Guaíba — T0 (m)", "interp": "O nível medido hoje na régua de Porto Alegre", "group": "Nível", "type": "level"},
     "guaiba_delta1":             {"desc": "Variação do nível do Guaíba em 1 dia (m)", "interp": "Se positivo, o nível subiu desde ontem", "group": "Nível", "type": "level"},
@@ -165,6 +174,17 @@ def rain_color_mm(mm):
     elif mm < 60: return "#FF9800"
     else: return "#F44336"
 
+def risk_level(prob):
+    """Return risk classification based on extreme event probability."""
+    if prob < 0.01:
+        return "Normal", "#4CAF50", "🟢"
+    elif prob < 0.05:
+        return "Atenção", "#F9A825", "🟡"
+    elif prob < 0.20:
+        return "Alerta Precoce", "#FF9800", "🟠"
+    else:
+        return "Risco Crítico", "#F44336", "🔴"
+
 
 # ── Data loading (cached) ────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner="Carregando dados históricos...")
@@ -187,6 +207,31 @@ def load_dev_data():
         df["guaiba_delta3"] = df["guaiba_nivel_mean"].diff(3)
     return df
 
+@st.cache_resource(show_spinner="Treinando modelo de classificação binária...")
+def load_binary_model():
+    """Load SFS features, fit OptimalBinning + LogisticRegression on DEV data."""
+    with open(PROJECT / "data" / "processed" / "sfs_results_logreg_optbin.json") as f:
+        ob_feats = json.load(f)["features"]
+
+    dev = pd.read_parquet(PROJECT / "data" / "processed" / "dataset_dev_v2.parquet")
+    dev["date"] = pd.to_datetime(dev["date"])
+    dev["target_bin"] = (dev["target_delta_5d"] > 1.0).astype(int)
+    dev = dev.dropna(subset=["target_delta_5d"])
+
+    binners = {}
+    for feat in ob_feats:
+        ob = OptimalBinning(name=feat, dtype="numerical", max_n_bins=4, min_bin_size=0.05)
+        ob.fit(dev[feat].values, dev["target_bin"].values)
+        binners[feat] = ob
+
+    X_train = np.column_stack([binners[feat].transform(dev[feat].values, metric="woe") for feat in ob_feats])
+    X_train = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_train)
+
+    model = LogisticRegression(max_iter=1000, random_state=42)
+    model.fit(X_train, dev["target_bin"].values)
+
+    return binners, model, ob_feats
+
 def run_update():
     """Run update_dataset.py to incrementally update the historical dataset."""
     import subprocess
@@ -206,6 +251,10 @@ def main():
     @keyframes pulse {
         0%,100% { box-shadow: 0 0 5px rgba(183,28,28,0.3); }
         50% { box-shadow: 0 0 15px rgba(183,28,28,0.6); }
+    }
+    @keyframes risk_glow {
+        0%,100% { box-shadow: 0 0 5px rgba(244,67,54,0.2); }
+        50% { box-shadow: 0 0 15px rgba(244,67,54,0.5); }
     }
     .metric-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -279,6 +328,17 @@ def main():
         st.sidebar.warning(f"⚠️ Dados {days_behind} dia{'s' if days_behind > 1 else ''} atrasado{'s' if days_behind > 1 else ''}")
     else:
         st.sidebar.success("✅ Dados atualizados")
+
+    # ── Binary model: compute probabilities on full dataset ──
+    try:
+        binners, bin_model, ob_feats = load_binary_model()
+        X_bin = np.column_stack([binners[f].transform(chart_df[f].values, metric="woe") for f in ob_feats])
+        X_bin = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_bin)
+        chart_df["prob_extremo"] = bin_model.predict_proba(X_bin)[:, 1]
+        binary_model_ok = True
+    except Exception as e:
+        binary_model_ok = False
+        chart_df["prob_extremo"] = 0.0
 
     # Horizon selector (removed — T+5 only)
 
@@ -354,6 +414,7 @@ def main():
 
     current_nivel = float(last["guaiba_nivel_mean"])
     current_alert = alert_level(current_nivel)
+    current_prob = float(last.get("prob_extremo", 0))
     # Compute delta_1d from view data
     if len(view_df) >= 2:
         delta_1d = float(view_df.iloc[-1]["guaiba_nivel_mean"] - view_df.iloc[-2]["guaiba_nivel_mean"])
@@ -387,7 +448,10 @@ def main():
 
     t5_text, t5_color = proj_trend(last_proj_T5, current_nivel)
 
-    col_sema, col_t5 = st.columns(2)
+    # ── Risk level classification ──
+    risk_cls, risk_col, risk_emo = risk_level(current_prob)
+
+    col_sema, col_risk, col_t5 = st.columns(3)
 
     with col_sema:
         ac = alert_color(current_alert)
@@ -398,6 +462,19 @@ def main():
             <div style="font-size:1.8em;font-weight:800;color:{ac}">{current_nivel:.2f}m</div>
             <div style="font-size:0.85em;color:{ac}">{alert_emoji(current_alert)} {current_alert}</div>
             <div style="font-size:0.75em;color:#8899aa;">{trend_text} ({delta_1d:+.3f}m)</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_risk:
+        prob_pct = current_prob * 100
+        risk_anim = "animation:risk_glow 1.5s infinite;" if current_prob >= 0.20 else ""
+        st.markdown(f"""
+        <div style="background:#1a1a2e;border:2px solid {risk_col};border-radius:12px;
+             padding:16px;text-align:center;{risk_anim}">
+            <div style="font-size:0.8em;color:#8899aa;">RISCO EXTREMO · {date_t0_str}</div>
+            <div style="font-size:1.8em;font-weight:800;color:{risk_col}">{prob_pct:.1f}%</div>
+            <div style="font-size:0.85em;color:{risk_col}">{risk_emo} {risk_cls}</div>
+            <div style="font-size:0.75em;color:#8899aa;">P(Δ5d > 1m)</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -421,7 +498,7 @@ def main():
     view_df["realizado_TN"] = view_df["guaiba_nivel_mean"].shift(-5)
     proj_col = "proj_T5"
 
-    fig = go.Figure()
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     # Actual level — green area with transparency
     fig.add_trace(go.Scatter(
@@ -430,7 +507,7 @@ def main():
         line=dict(color="rgba(76,175,80,0.6)", width=1.5),
         fill="tozeroy", fillcolor="rgba(76,175,80,0.15)",
         hovertemplate="%{x|%d/%m/%Y}: %{y:.3f}m<extra></extra>",
-    ))
+    ), secondary_y=False)
 
     # Realizado T+N — dark blue solid
     fig.add_trace(go.Scatter(
@@ -439,7 +516,7 @@ def main():
         line=dict(color="#0D47A1", width=2.5),
         marker=dict(size=5, color="#0D47A1"),
         hovertemplate=f"Real T+5: %{{y:.3f}}m<extra></extra>",
-    ))
+    ), secondary_y=False)
 
     # Projeção T+N — light blue dashed
     if proj_col in view_df.columns:
@@ -448,19 +525,39 @@ def main():
             mode="lines", name=f"Projeção T+5",
             line=dict(color="#64B5F6", width=1.5, dash="dot"),
             hovertemplate=f"Proj T+5: %{{y:.3f}}m<extra></extra>",
-        ))
+        ), secondary_y=False)
+
+    # ── Probability line (secondary Y-axis) ──
+    if "prob_extremo" in view_df.columns:
+        fig.add_trace(go.Scatter(
+            x=view_df["date"], y=view_df["prob_extremo"] * 100,
+            mode="lines", name="P(extremo)",
+            line=dict(color="#9C27B0", width=2, dash="dash"),
+            hovertemplate="P(Δ>1m): %{y:.1f}%<extra></extra>",
+        ), secondary_y=True)
+
+        # Threshold reference lines on secondary axis
+        prob_max = max(view_df["prob_extremo"].max() * 100 * 1.2, 25)
+        for thresh, lbl in [(1, "1%"), (5, "5%"), (20, "20%")]:
+            fig.add_hline(y=thresh, line_dash="dot", line_color="rgba(156,39,176,0.3)", line_width=1,
+                          annotation_text=lbl, annotation_position="top right",
+                          annotation_font_size=10, annotation_font_color="rgba(156,39,176,0.6)",
+                          secondary_y=True)
+    else:
+        prob_max = 25
 
     # Alert level lines
     for nivel, cor, label in [(1.0, "#4CAF50", "Atenção 1.0m"), (2.0, "#FF9800", "Alerta 2.0m"), (3.0, "#F44336", "INUNDAÇÃO 3.0m")]:
         fig.add_hline(y=nivel, line_dash="dash", line_color=cor, line_width=1,
                       annotation_text=label, annotation_position="top left",
-                      annotation_font_size=11, annotation_font_color=cor)
+                      annotation_font_size=11, annotation_font_color=cor,
+                      secondary_y=False)
 
     # Colored bands
     ymax = max(view_df["guaiba_nivel_mean"].max(), 4.0) if len(view_df) > 0 else 4.0
     for y0, y1, color in [(0,1,"rgba(76,175,80,0.06)"),(1,2,"rgba(255,235,59,0.04)"),
                            (2,3,"rgba(255,152,0,0.04)"),(3,ymax,"rgba(244,67,54,0.06)")]:
-        fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0)
+        fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, secondary_y=False)
 
     fig.update_layout(
         height=560,
@@ -473,7 +570,6 @@ def main():
         paper_bgcolor="#0d0d1a",
         plot_bgcolor="#1a1a2e",
         xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickformat="%d%b%y"),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", ticksuffix="m", range=[0, ymax]),
         legend=dict(
             orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5,
             font=dict(color="#ccc", size=11),
@@ -481,11 +577,24 @@ def main():
             bordercolor="#2a2a4a",
             borderwidth=1,
         ),
-        margin=dict(l=60, r=30, t=40, b=80),
+        margin=dict(l=60, r=60, t=40, b=80),
         hovermode="x unified",
     )
 
-    st.plotly_chart(fig, width="stretch")
+    # Primary Y-axis (left)
+    fig.update_yaxes(
+        gridcolor="rgba(255,255,255,0.04)", ticksuffix="m", range=[0, ymax],
+        secondary_y=False
+    )
+    # Secondary Y-axis (right)
+    fig.update_yaxes(
+        title_text="P(Δ>1m)", title_font=dict(color="#9C27B0"),
+        tickfont=dict(color="#9C27B0"), ticksuffix="%",
+        range=[0, prob_max], showgrid=False,
+        secondary_y=True
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
     # ── Rain Summary ──
     if "chuva_total_raw" in last.index:
@@ -520,8 +629,8 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Feature Monitor Table ──
-    st.markdown("### 📊 Monitor de Variáveis")
+    # ── Feature Monitor Table (Diagnostic Panel) ──
+    st.markdown("### 📊 Painel de Diagnóstico")
     st.caption(f"Valores medidos em {date_t0_str} e comparados com a distribuição histórica (2019–2025) para identificar anomalias · Percentis: P0-P75 normal, P75-P90 elevado, P90-P95 muito alto, P95-P99 extremo, P99+ crítico")
 
     dev_df = load_dev_data()
@@ -537,8 +646,32 @@ def main():
         "Contexto": "rgba(158,158,158,0.08)",
     }
 
+    # Compute contributions for SFS features if binary model is loaded
+    feature_contributions = {}  # feat -> (coef, woe, contribution)
+    if binary_model_ok:
+        try:
+            coefs = bin_model.coef_[0]  # shape (n_features,)
+            for i, feat in enumerate(ob_feats):
+                val_feat = float(last[feat]) if feat in last.index and not pd.isna(last.get(feat)) else np.nan
+                woe_val = binners[feat].transform(np.array([val_feat]), metric="woe")[0]
+                if np.isnan(woe_val):
+                    woe_val = 0.0
+                coef_val = coefs[i]
+                contrib = coef_val * woe_val
+                feature_contributions[feat] = {
+                    "coef": coef_val,
+                    "woe": woe_val,
+                    "contribution": contrib,
+                }
+        except Exception:
+            pass
+
     # Collect all features with their metadata, bucketed by group
     all_feats = sorted(set(ALL_MODEL_FEATURES) | EXTRA_KEYS | OFF_MODEL_1D)
+    # Also include the SFS binary features that may not be in the above sets
+    for bf in ob_feats:
+        if binary_model_ok and bf not in all_feats:
+            all_feats.append(bf)
     grouped = {}
     for feat in all_feats:
         meta = FEATURE_META.get(feat)
@@ -547,21 +680,67 @@ def main():
         grp = meta.get("group", "Contexto")
         is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D
         imp = importance_map.get(feat, 0) if not is_extra else -1
-        grouped.setdefault(grp, []).append((feat, imp, is_extra))
+        contrib = feature_contributions.get(feat, {}).get("contribution", None)
+        grouped.setdefault(grp, []).append((feat, imp, is_extra, contrib))
 
     rows_html = ""
     n_extra = 0
     status_counts = {"Normal": 0, "Elevado": 0, "Muito Alto": 0, "Extremo": 0, "CRÍTICO": 0}
+    is_elevated_risk = current_prob >= 0.05
+
+    # Count contributing features
+    n_contributing = sum(1 for v in feature_contributions.values() if v["contribution"] > 0)
+
+    # Banner
+    if is_elevated_risk:
+        banner_bg = "rgba(244,67,54,0.08)"
+        banner_border = "#F44336"
+        banner_text = f"⚠️ Risco elevado detectado — variáveis-chave identificadas · P(extremo) = {current_prob*100:.1f}%"
+    else:
+        banner_bg = "rgba(76,175,80,0.08)"
+        banner_border = "#4CAF50"
+        banner_text = "✅ Cenário normal — nenhuma variável em regime extremo"
+
+    st.markdown(f"""
+    <div style="background:{banner_bg};border:1px solid {banner_border};border-radius:10px;
+         padding:12px 18px;margin-bottom:12px;font-size:0.9em;color:{banner_border};">
+        {banner_text}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Determine top 3 contributing features for highlighting
+    top3_contrib = set()
+    if is_elevated_risk and feature_contributions:
+        sorted_contribs = sorted(
+            [(f, c["contribution"]) for f, c in feature_contributions.items() if c["contribution"] > 0],
+            key=lambda x: -x[1]
+        )
+        top3_contrib = set(f for f, _ in sorted_contribs[:3])
+
     for grp in GROUP_ORDER:
         feats = grouped.get(grp, [])
         if not feats:
             continue
-        # Sort: model features first by importance desc, then off-model
-        feats.sort(key=lambda x: (x[2], -x[1]))
+
+        if is_elevated_risk:
+            # Sort: positive contribution first (highest), then negative (lowest), then N/A
+            def sort_key(x):
+                feat, imp, is_extra, contrib = x
+                if contrib is not None:
+                    if contrib > 0:
+                        return (0, -contrib)  # positive first, highest first
+                    else:
+                        return (1, contrib)   # negative, most negative first
+                return (2, 0)  # N/A last
+            feats.sort(key=sort_key)
+        else:
+            # Default sort: model features first by importance desc, then off-model
+            feats.sort(key=lambda x: (x[2], -x[1]))
+
         grp_bg = GROUP_COLORS.get(grp, "rgba(158,158,158,0.08)")
         rows_html += f'<tr><td colspan="5" style="background:{grp_bg};padding:8px 10px;font-weight:700;font-size:0.9em;color:#bbb;letter-spacing:0.5px;border-top:1px solid #2a2a4a;">{grp}</td></tr>'
 
-        for feat, imp_val, is_extra in feats:
+        for feat, imp_val, is_extra, contrib in feats:
             meta = FEATURE_META[feat]
             ftype = meta.get("type", "other")
             val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
@@ -572,7 +751,14 @@ def main():
             is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D
             if is_extra: n_extra += 1
 
-            row_bg = "background:rgba(255,152,0,0.04);" if is_extra else ""
+            # Highlight top 3 contributing features
+            is_top3 = feat in top3_contrib
+            if is_top3:
+                row_bg = "background:rgba(244,67,54,0.06);animation:risk_glow 2s infinite;"
+            elif is_extra:
+                row_bg = "background:rgba(255,152,0,0.04);"
+            else:
+                row_bg = ""
             desc_style = "font-style:italic;color:#aaa;" if is_extra else "color:#ddd;"
 
             # Importance display
@@ -581,6 +767,17 @@ def main():
                 imp_html = f'<span style="color:#64B5F6;font-size:1em;font-weight:600;">{imp_pct:.0f}%</span>'
             else:
                 imp_html = '<span style="color:#555;font-size:0.9em;">—</span>'
+
+            # Contribution display
+            if contrib is not None and binary_model_ok:
+                if contrib > 0.01:
+                    contrib_html = f'<span style="color:#F44336;font-weight:700;font-size:0.95em;">+{contrib:.2f} ↑</span>'
+                elif contrib < -0.01:
+                    contrib_html = f'<span style="color:#4CAF50;font-weight:700;font-size:0.95em;">{contrib:.2f} ↓</span>'
+                else:
+                    contrib_html = f'<span style="color:#8899aa;font-size:0.9em;">{contrib:+.2f}</span>'
+            else:
+                contrib_html = '<span style="color:#555;font-size:0.9em;">—</span>'
 
             pct_colors = {"normal":"#4CAF50","elevated":"#F9A825","very_high":"#FF9800","extreme":"#F44336","critical":"#B71C1C"}
             pct_labels = {"normal":"Normal","elevated":"Elevado","very_high":"Muito Alto","extreme":"Extremo","critical":"CRÍTICO"}
@@ -633,8 +830,8 @@ def main():
             </td>
             <td style="font-weight:600;">{val_html}</td>
             <td>{pct_html}</td>
+            <td>{contrib_html}</td>
             <td>{imp_html}</td>
-            <td>{bar_html}</td>
         </tr>"""
 
     # Build summary badges
@@ -646,7 +843,14 @@ def main():
         _sc = status_counts.get(_sn, 0)
         _sp = (_sc / total_vars * 100) if total_vars > 0 else 0
         _sum_parts.append(f'<span style="background:{_sum_color[_sn]}22;color:{_sum_color[_sn]};padding:4px 10px;border-radius:8px;font-size:0.85em;font-weight:600;">{_sum_emoji[_sn]} {_sn}: {_sc} ({_sp:.0f}%)</span>')
-    summary_html = ' <span style="color:#555;">·</span> '.join(_sum_parts)
+
+    # Add risk extremo line if elevated
+    if is_elevated_risk and binary_model_ok:
+        _risk_line = f'<div style="margin-top:8px;"><span style="background:{risk_col}22;color:{risk_col};padding:4px 12px;border-radius:8px;font-size:0.9em;font-weight:700;">🔴 Risco extremo: {current_prob*100:.1f}% — {n_contributing} variável(is) contribuindo</span></div>'
+    else:
+        _risk_line = ""
+
+    summary_html = ' <span style="color:#555;">·</span> '.join(_sum_parts) + _risk_line
     st.markdown(f'<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:14px 18px;margin-bottom:10px;text-align:center;">{summary_html}</div>', unsafe_allow_html=True)
 
     st.markdown(f"""
@@ -657,14 +861,15 @@ def main():
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;">Variável</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Valor</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Status</th>
+            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Contribuição</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Importância</th>
-            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Barra</th>
         </tr>
     </thead>
     <tbody>{rows_html}</tbody>
     </table>
     <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:0.82em;color:#8899aa;border-top:1px solid #2a2a4a;">
-        ⚠️ Variáveis em itálico (fundo levemente alaranjado) <b>NÃO fazem parte dos modelos 3d/5d</b> — são incluídas como contexto adicional (delta_1d SFS ou variáveis de referência). A coluna "Importância" mostra "—" para essas variáveis.
+        ⚠️ Variáveis em itálico (fundo levemente alaranjado) <b>NÃO fazem parte dos modelos 3d/5d</b> — são incluídas como contexto adicional (delta_1d SFS ou variáveis de referência). A coluna "Importância" mostra "—" para essas variáveis.<br>
+        📊 <b>Contribuição</b> = impacto da variável na probabilidade de evento extremo (modelo LogReg+OptBin). Valores positivos ↑ aumentam o risco; valores negativos ↓ reduzem o risco. Apenas as 7 variáveis do modelo binário têm contribuição calculada.
     </div>
     </div>
     """, unsafe_allow_html=True)
@@ -697,7 +902,10 @@ def main():
 
     # ── Footer ──
     st.markdown("---")
-    st.caption(f"Sistema de previsão de enchentes do Rio Guaíba · Modelos: CatBoost (delta_5d) · Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    model_info = "CatBoost (delta_5d)"
+    if binary_model_ok:
+        model_info += " · LogReg+OptBin (P extremo)"
+    st.caption(f"Sistema de previsão de enchentes do Rio Guaíba · Modelos: {model_info} · Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 
 if __name__ == "__main__":
