@@ -712,21 +712,22 @@ def main():
                 return (2, 0)  # N/A last
             feats.sort(key=sort_key)
         else:
-            # Default sort: by status severity (critical first), then by contribution/importance
+            # Sort: severity > CB importance > LR contribution
             severity_order = {"CRÍTICO": 0, "Extremo": 1, "Muito Alto": 2, "Elevado": 3, "Normal": 4}
             def sort_key(x):
                 feat_name = x[0]
-                is_extra = x[2]
                 contrib = x[3]
-                # Compute status for sorting
+                # Status severity
                 val_tmp = float(last[feat_name]) if feat_name in last.index and not pd.isna(last[feat_name]) else 0
                 col_tmp = dev_df[feat_name].dropna() if feat_name in dev_df.columns else pd.Series(dtype=float)
                 pct_tmp = float((col_tmp <= val_tmp).mean() * 100) if len(col_tmp) > 0 else 0
                 cls_tmp = percentile_class(pct_tmp)
                 sev = severity_order.get(cls_tmp, 5)
-                # LogReg features with positive contribution go first
-                is_lr = feat_name in SFS_LOGREG and contrib is not None and contrib > 0
-                return (0 if is_lr else 1, sev, -(contrib or 0))
+                # CB importance (delta_5d)
+                cb_imp = importance_map.get(feat_name, 0)
+                # LR contribution (absolute value)
+                lr_contrib = abs(contrib) if contrib is not None else 0
+                return (sev, -cb_imp, -lr_contrib)
             feats.sort(key=sort_key)
 
         grp_bg = GROUP_COLORS.get(grp, "rgba(158,158,158,0.08)")
