@@ -316,6 +316,9 @@ def main():
     else:
         st.sidebar.success("✅ Dados atualizados")
 
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("💡 **Como usar:** arraste o período ou digite as datas para navegar pelo histórico. Todos os indicadores, gráficos e variáveis atualizam para a data final selecionada. Experimente datas de eventos conhecidos (ex: 05/05/2024) para fazer backtests.")
+
     # ── Binary model: prob_extremo already in dataset ──
     if "prob_extremo" not in chart_df.columns:
         chart_df["prob_extremo"] = 0.0
@@ -404,7 +407,7 @@ def main():
 
     # ── Header ──
     st.markdown(f"# 🌊 Monitor de Enchentes — Rio Guaíba")
-    st.caption(f"📅 Dados de: {pd.Timestamp(last['date']).strftime('%d/%m/%Y')} · {len(chart_df)} dias de histórico")
+    st.caption(f"📅 Todos os dados exibidos referem-se a **{pd.Timestamp(last['date']).strftime('%d/%m/%Y')}** (data final selecionada) · {len(chart_df)} dias de histórico · Altere o período no menu lateral para navegar ou fazer backtests")
 
     # ── Cards de status ──
     # Compute target dates
