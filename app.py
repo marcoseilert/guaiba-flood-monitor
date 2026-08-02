@@ -696,7 +696,7 @@ def main():
         top3_contrib = set(f for f, _ in sorted_contribs[:3])
 
     # Flat list with pre-computed status, sorted by severity > CB importance > LR contribution
-    severity_order = {"CRÍTICO": 0, "Extremo": 1, "Muito Alto": 2, "Elevado": 3, "Normal": 4}
+    severity_order = {"critical": 0, "extreme": 1, "very_high": 2, "elevated": 3, "normal": 4}
 
     all_feats_data = []
     for grp in GROUP_ORDER:
