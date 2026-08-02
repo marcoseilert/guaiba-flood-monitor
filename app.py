@@ -709,12 +709,13 @@ def main():
             sev = severity_order.get(cls, 5)
             cb_imp = importance_map.get(feat, 0)
             lr_contrib = abs(contrib) if contrib is not None else 0
-            all_feats_data.append((feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib))
+            is_off = 1 if (feat in EXTRA_KEYS or feat in OFF_MODEL_1D or feat in OFF_MODEL_3D) else 0
+            all_feats_data.append((feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib, is_off))
 
-    # Sort: severity ASC > CB importance DESC > LR contribution DESC
-    all_feats_data.sort(key=lambda x: (x[7], -x[8], -x[9]))
+    # Sort: severity ASC > on-model first > CB importance DESC > LR contribution DESC
+    all_feats_data.sort(key=lambda x: (x[7], x[10], -x[8], -x[9]))
 
-    for feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib in all_feats_data:
+    for feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib, is_off in all_feats_data:
         meta = FEATURE_META[feat]
         ftype = meta.get("type", "other")
 
