@@ -54,6 +54,9 @@ OFF_MODEL_1D = {
     "gravatai_sl_nivel_max", "encantado_precip_mm", "cachoeira_do_sul_wind_max_kmh",
     "cachoeira_do_sul_precip_mm", "catsul_nivel_max", "taquari_mucum_chuva_roll3",
     "rio_grande_v_wind",
+    # SFS LogReg+OptBin (classificação binária)
+    "sinos_cb_chuva_roll3", "sinos_sl_nivel_mean_lag3", "represamento_3d",
+    "rio_grande_v_wind_roll2", "jacui_rp_chuva_roll3", "sinos_sl_nivel_mean_lag1",
 }
 
 FEATURE_META = {
@@ -69,6 +72,7 @@ FEATURE_META = {
     "catsul_chuva":              {"desc": "Chuva no Terminal CATSUL (mm)", "interp": "Chuva direta na região do Guaíba a jusante", "group": "Chuva", "type": "rain"},
     "sinos_cb_chuva_roll3":      {"desc": "Chuva acumulada em 3 dias em Campo Bom/Sinos (mm)", "interp": "Chuva na sub-bacia dos Sinos — Campo Bom", "group": "Chuva", "type": "rain"},
     "jacui_rp_chuva_roll3":      {"desc": "Chuva acumulada em 3 dias no Jacuí — Rio Pardo (mm)", "interp": "Chuva recente no Jacuí — contribuição direta ao Guaíba", "group": "Chuva", "type": "rain"},
+    "sinos_cb_chuva_roll3":      {"desc": "Chuva acumulada em 3 dias em Campo Bom/Sinos (mm)", "interp": "Chuva na sub-bacia dos Sinos — Campo Bom", "group": "Chuva", "type": "rain"},
     # ── Vento (direção) ──
     "encantado_wind_dir_deg":          {"desc": "Direção do vento em Encantado (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "wind_dir"},
     "cachoeira_do_sul_wind_dir_deg":   {"desc": "Direção do vento em Cachoeira do Sul (°)", "interp": "Rosa dos ventos: N/NW=sobe, S/SE=desce", "group": "Vento (direção)", "type": "wind_dir"},
