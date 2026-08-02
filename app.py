@@ -274,18 +274,11 @@ def main():
     today = datetime.now().date()
     days_behind = (today - last_date).days
 
-    # Auto-update if data is behind
-    if days_behind > 0:
-        with st.spinner(f"📅 Atualizando dados (+{days_behind} dia{'s' if days_behind > 1 else ''})..."):
-            success, output = run_update()
-        if success:
-            st.cache_data.clear()
-            st.rerun()
-        else:
-            st.error(f"Erro ao atualizar:\n{output}")
-
     st.sidebar.caption(f"📂 Dados: {chart_df['date'].min().date()} → {last_date} ({len(chart_df)} dias)")
-    st.sidebar.success("✅ Dados atualizados")
+    if days_behind > 0:
+        st.sidebar.warning(f"⚠️ Dados {days_behind} dia{'s' if days_behind > 1 else ''} atrasado{'s' if days_behind > 1 else ''}")
+    else:
+        st.sidebar.success("✅ Dados atualizados")
 
     # Horizon selector (removed — T+5 only)
 
