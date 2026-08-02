@@ -54,9 +54,6 @@ OFF_MODEL_1D = {
     "gravatai_sl_nivel_max", "encantado_precip_mm", "cachoeira_do_sul_wind_max_kmh",
     "cachoeira_do_sul_precip_mm", "catsul_nivel_max", "taquari_mucum_chuva_roll3",
     "rio_grande_v_wind",
-    # SFS LogReg+OptBin exclusive features
-    "sinos_cb_chuva_roll3", "sinos_sl_nivel_mean_lag3", "represamento_3d",
-    "rio_grande_v_wind_roll2", "jacui_rp_chuva_roll3", "sinos_sl_nivel_mean_lag1",
 }
 # SFS LogReg+OptBin features (binary classification)
 SFS_LOGREG = {
@@ -64,8 +61,12 @@ SFS_LOGREG = {
     "represamento_3d", "rio_grande_v_wind_roll2", "jacui_rp_chuva_roll3",
     "sinos_sl_nivel_mean_lag1",
 }
-# Features exclusive to SFS LogReg (not in CatBoost/LightGBM models)
-OFF_MODEL_BIN = SFS_LOGREG - set(ALL_MODEL_FEATURES)
+# Features in delta_3d but NOT in delta_5d (T+3 removed from dashboard)
+FEATURES_3D_SET = set(FEATURES_3D)
+FEATURES_5D_SET = set(FEATURES_5D)
+OFF_MODEL_3D = FEATURES_3D_SET - FEATURES_5D_SET
+# Features exclusive to SFS LogReg (not in CatBoost)
+OFF_MODEL_BIN = SFS_LOGREG - FEATURES_5D_SET
 
 FEATURE_META = {
     # ── Chuva ──
@@ -641,18 +642,14 @@ def main():
         ob_feats = []
 
     feature_contributions = {}
-    if binary_model_ok:
-        for feat in ob_feats:
-            contrib_col = f"contrib_{feat}"
-            if contrib_col in last.index:
-                feature_contributions[feat] = {"contribution": float(last[contrib_col])}
+    # Load contributions for SFS LogReg features (always, from pre-computed dataset)
+    for feat in ob_feats:
+        contrib_col = f"contrib_{feat}"
+        if contrib_col in last.index:
+            feature_contributions[feat] = {"contribution": float(last[contrib_col])}
 
     # Collect all features with their metadata, bucketed by group
-    all_feats = sorted(set(ALL_MODEL_FEATURES) | EXTRA_KEYS | OFF_MODEL_1D)
-    # Also include the SFS binary features that may not be in the above sets
-    for bf in ob_feats:
-        if binary_model_ok and bf not in all_feats:
-            all_feats.append(bf)
+    all_feats = sorted(set(ALL_MODEL_FEATURES) | EXTRA_KEYS | OFF_MODEL_1D | SFS_LOGREG)
     grouped = {}
     for feat in all_feats:
         meta = FEATURE_META.get(feat)
@@ -729,15 +726,14 @@ def main():
             pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
             cls = percentile_class(pct)
 
-            is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D
+            is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D or feat in OFF_MODEL_3D
+            is_logreg = feat in SFS_LOGREG
 
-            # Model badges
-            in_cb = feat in FEATURES_5D
-            in_lgb = feat in FEATURES_3D
+            # Model badges (no LGB — T+3 removed from dashboard)
+            in_cb = feat in FEATURES_5D_SET
             in_lr = feat in SFS_LOGREG
             badges = []
             if in_cb: badges.append('<span style="background:rgba(33,150,243,0.15);color:#64B5F6;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">CB</span>')
-            if in_lgb: badges.append('<span style="background:rgba(76,175,80,0.15);color:#81C784;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">LGB</span>')
             if in_lr: badges.append('<span style="background:rgba(156,39,176,0.15);color:#CE93D8;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">LR</span>')
             badge_html = " ".join(badges) if badges else '<span style="color:#555;font-size:0.7em;">—</span>'
             if is_extra: n_extra += 1
@@ -759,8 +755,8 @@ def main():
             else:
                 imp_html = '<span style="color:#555;font-size:0.9em;">—</span>'
 
-            # Contribution display
-            if contrib is not None and binary_model_ok:
+            # Contribution display (always show for LogReg features)
+            if contrib is not None:
                 if contrib > 0.01:
                     contrib_html = f'<span style="color:#F44336;font-weight:700;font-size:0.95em;">+{contrib:.2f} ↑</span>'
                 elif contrib < -0.01:
