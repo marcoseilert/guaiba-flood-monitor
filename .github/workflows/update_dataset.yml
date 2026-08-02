@@ -2,7 +2,7 @@ name: Update Dataset
 
 on:
   schedule:
-    - cron: '0 12 * * *'  # Every day at 12h UTC (9h BRT)
+    - cron: '0 5,11,17,23 * * *'  # 02h,08h,14h,20h BRT
   workflow_dispatch:  # Manual trigger
 
 jobs:
