@@ -695,34 +695,28 @@ def main():
         )
         top3_contrib = set(f for f, _ in sorted_contribs[:3])
 
-    # Flat list of all features, sorted by severity > CB importance > LR contribution
-    all_feats_list = []
-    for grp in GROUP_ORDER:
-        for item in grouped.get(grp, []):
-            all_feats_list.append(item)
-
-    # Sort: severity > CB importance > LR contribution
+    # Flat list with pre-computed status, sorted by severity > CB importance > LR contribution
     severity_order = {"CRÍTICO": 0, "Extremo": 1, "Muito Alto": 2, "Elevado": 3, "Normal": 4}
-    def sort_key(x):
-        feat_name = x[0]
-        contrib = x[3]
-        val_tmp = float(last[feat_name]) if feat_name in last.index and not pd.isna(last[feat_name]) else 0
-        col_tmp = dev_df[feat_name].dropna() if feat_name in dev_df.columns else pd.Series(dtype=float)
-        pct_tmp = float((col_tmp <= val_tmp).mean() * 100) if len(col_tmp) > 0 else 0
-        cls_tmp = percentile_class(pct_tmp)
-        sev = severity_order.get(cls_tmp, 5)
-        cb_imp = importance_map.get(feat_name, 0)
-        lr_contrib = abs(contrib) if contrib is not None else 0
-        return (sev, -cb_imp, -lr_contrib)
-    all_feats_list.sort(key=sort_key)
 
-    for feat, imp_val, is_extra, contrib in all_feats_list:
+    all_feats_data = []
+    for grp in GROUP_ORDER:
+        for feat, imp_val, is_extra, contrib in grouped.get(grp, []):
+            meta = FEATURE_META[feat]
+            val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
+            col_dev = dev_df[feat].dropna() if feat in dev_df.columns else pd.Series(dtype=float)
+            pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
+            cls = percentile_class(pct)
+            sev = severity_order.get(cls, 5)
+            cb_imp = importance_map.get(feat, 0)
+            lr_contrib = abs(contrib) if contrib is not None else 0
+            all_feats_data.append((feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib))
+
+    # Sort: severity ASC > CB importance DESC > LR contribution DESC
+    all_feats_data.sort(key=lambda x: (x[7], -x[8], -x[9]))
+
+    for feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib in all_feats_data:
         meta = FEATURE_META[feat]
         ftype = meta.get("type", "other")
-        val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
-        col_dev = dev_df[feat].dropna() if feat in dev_df.columns else pd.Series(dtype=float)
-        pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
-        cls = percentile_class(pct)
 
         is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D or feat in OFF_MODEL_3D
         is_logreg = feat in SFS_LOGREG
