@@ -695,146 +695,129 @@ def main():
         )
         top3_contrib = set(f for f, _ in sorted_contribs[:3])
 
+    # Flat list of all features, sorted by severity > CB importance > LR contribution
+    all_feats_list = []
     for grp in GROUP_ORDER:
-        feats = grouped.get(grp, [])
-        if not feats:
-            continue
+        for item in grouped.get(grp, []):
+            all_feats_list.append(item)
 
-        if is_elevated_risk:
-            # Sort: positive contribution first (highest), then negative (lowest), then N/A
-            def sort_key(x):
-                feat, imp, is_extra, contrib = x
-                if contrib is not None:
-                    if contrib > 0:
-                        return (0, -contrib)  # positive first, highest first
-                    else:
-                        return (1, contrib)   # negative, most negative first
-                return (2, 0)  # N/A last
-            feats.sort(key=sort_key)
+    # Sort: severity > CB importance > LR contribution
+    severity_order = {"CRÍTICO": 0, "Extremo": 1, "Muito Alto": 2, "Elevado": 3, "Normal": 4}
+    def sort_key(x):
+        feat_name = x[0]
+        contrib = x[3]
+        val_tmp = float(last[feat_name]) if feat_name in last.index and not pd.isna(last[feat_name]) else 0
+        col_tmp = dev_df[feat_name].dropna() if feat_name in dev_df.columns else pd.Series(dtype=float)
+        pct_tmp = float((col_tmp <= val_tmp).mean() * 100) if len(col_tmp) > 0 else 0
+        cls_tmp = percentile_class(pct_tmp)
+        sev = severity_order.get(cls_tmp, 5)
+        cb_imp = importance_map.get(feat_name, 0)
+        lr_contrib = abs(contrib) if contrib is not None else 0
+        return (sev, -cb_imp, -lr_contrib)
+    all_feats_list.sort(key=sort_key)
+
+    for feat, imp_val, is_extra, contrib in all_feats_list:
+        meta = FEATURE_META[feat]
+        ftype = meta.get("type", "other")
+        val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
+        col_dev = dev_df[feat].dropna() if feat in dev_df.columns else pd.Series(dtype=float)
+        pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
+        cls = percentile_class(pct)
+
+        is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D or feat in OFF_MODEL_3D
+        is_logreg = feat in SFS_LOGREG
+
+        # Model badges (no LGB — T+3 removed from dashboard)
+        in_cb = feat in FEATURES_5D_SET
+        in_lr = feat in SFS_LOGREG
+        badges = []
+        if in_cb: badges.append('<span style="background:rgba(33,150,243,0.15);color:#64B5F6;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">CB</span>')
+        if in_lr: badges.append('<span style="background:rgba(156,39,176,0.15);color:#CE93D8;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">LR</span>')
+        badge_html = " ".join(badges) if badges else '<span style="color:#555;font-size:0.7em;">—</span>'
+        if is_extra: n_extra += 1
+
+        # Highlight top 3 contributing features
+        is_top3 = feat in top3_contrib
+        if is_top3:
+            row_bg = "background:rgba(244,67,54,0.06);animation:risk_glow 2s infinite;"
+        elif is_extra:
+            row_bg = "background:rgba(255,152,0,0.04);"
         else:
-            # Sort: severity > CB importance > LR contribution
-            severity_order = {"CRÍTICO": 0, "Extremo": 1, "Muito Alto": 2, "Elevado": 3, "Normal": 4}
-            def sort_key(x):
-                feat_name = x[0]
-                contrib = x[3]
-                # Status severity
-                val_tmp = float(last[feat_name]) if feat_name in last.index and not pd.isna(last[feat_name]) else 0
-                col_tmp = dev_df[feat_name].dropna() if feat_name in dev_df.columns else pd.Series(dtype=float)
-                pct_tmp = float((col_tmp <= val_tmp).mean() * 100) if len(col_tmp) > 0 else 0
-                cls_tmp = percentile_class(pct_tmp)
-                sev = severity_order.get(cls_tmp, 5)
-                # CB importance (delta_5d)
-                cb_imp = importance_map.get(feat_name, 0)
-                # LR contribution (absolute value)
-                lr_contrib = abs(contrib) if contrib is not None else 0
-                return (sev, -cb_imp, -lr_contrib)
-            feats.sort(key=sort_key)
+            row_bg = ""
+        desc_style = "font-style:italic;color:#aaa;" if is_extra else "color:#ddd;"
 
-        grp_bg = GROUP_COLORS.get(grp, "rgba(158,158,158,0.08)")
-        rows_html += f'<tr><td colspan="5" style="background:{grp_bg};padding:8px 10px;font-weight:700;font-size:0.9em;color:#bbb;letter-spacing:0.5px;border-top:1px solid #2a2a4a;">{grp}</td></tr>'
+        # Importance display
+        if not is_extra and feat in importance_map and importance_map[feat] > 0:
+            imp_pct = importance_map[feat]
+            imp_html = f'<span style="color:#64B5F6;font-size:1em;font-weight:600;">{imp_pct:.0f}%</span>'
+        else:
+            imp_html = '<span style="color:#555;font-size:0.9em;">—</span>'
 
-        for feat, imp_val, is_extra, contrib in feats:
-            meta = FEATURE_META[feat]
-            ftype = meta.get("type", "other")
-            val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
-            col_dev = dev_df[feat].dropna() if feat in dev_df.columns else pd.Series(dtype=float)
-            pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
-            cls = percentile_class(pct)
-
-            is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D or feat in OFF_MODEL_3D
-            is_logreg = feat in SFS_LOGREG
-
-            # Model badges (no LGB — T+3 removed from dashboard)
-            in_cb = feat in FEATURES_5D_SET
-            in_lr = feat in SFS_LOGREG
-            badges = []
-            if in_cb: badges.append('<span style="background:rgba(33,150,243,0.15);color:#64B5F6;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">CB</span>')
-            if in_lr: badges.append('<span style="background:rgba(156,39,176,0.15);color:#CE93D8;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">LR</span>')
-            badge_html = " ".join(badges) if badges else '<span style="color:#555;font-size:0.7em;">—</span>'
-            if is_extra: n_extra += 1
-
-            # Highlight top 3 contributing features
-            is_top3 = feat in top3_contrib
-            if is_top3:
-                row_bg = "background:rgba(244,67,54,0.06);animation:risk_glow 2s infinite;"
-            elif is_extra:
-                row_bg = "background:rgba(255,152,0,0.04);"
+        # Contribution display (always show for LogReg features)
+        if contrib is not None:
+            if contrib > 0.01:
+                contrib_html = f'<span style="color:#F44336;font-weight:700;font-size:0.95em;">+{contrib:.2f} ↑</span>'
+            elif contrib < -0.01:
+                contrib_html = f'<span style="color:#4CAF50;font-weight:700;font-size:0.95em;">{contrib:.2f} ↓</span>'
             else:
-                row_bg = ""
-            desc_style = "font-style:italic;color:#aaa;" if is_extra else "color:#ddd;"
+                contrib_html = f'<span style="color:#8899aa;font-size:0.9em;">{contrib:+.2f}</span>'
+        else:
+            contrib_html = '<span style="color:#555;font-size:0.9em;">—</span>'
 
-            # Importance display
-            if not is_extra and feat in importance_map and importance_map[feat] > 0:
-                imp_pct = importance_map[feat]
-                imp_html = f'<span style="color:#64B5F6;font-size:1em;font-weight:600;">{imp_pct:.0f}%</span>'
+        pct_colors = {"normal":"#4CAF50","elevated":"#F9A825","very_high":"#FF9800","extreme":"#F44336","critical":"#B71C1C"}
+        pct_labels = {"normal":"Normal","elevated":"Elevado","very_high":"Muito Alto","extreme":"Extremo","critical":"CRÍTICO"}
+        pc = pct_colors.get(cls, "#4CAF50")
+        pl = pct_labels.get(cls, "Normal")
+        pulse = "animation:pulse 1.5s infinite;" if cls == "critical" else ""
+
+        # Wind direction: show arrow + compass + impact classification from JSON
+        if ftype == "wind_dir" or (ftype == "off_model" and "wind_dir" in feat):
+            arrow = deg_to_arrow(val)
+            compass_pt = deg_to_compass_pt(val)
+            compass_abbr = deg_to_compass(val)
+            # Look up classification from wind_impact JSON
+            wi_class = "neutral"
+            wi_impact = 0.0
+            try:
+                if feat in wind_impact.get("classification", {}) and compass_abbr in wind_impact["classification"][feat]:
+                    ci = wind_impact["classification"][feat][compass_abbr]
+                    wi_class = ci.get("class", "neutral")
+                    wi_impact = ci.get("avg_impact", 0.0)
+            except Exception:
+                pass
+            wi_color_map = {"better": "#4CAF50", "neutral": "#8899aa", "worse": "#F44336"}
+            wi_label_map = {"better": "🟢 Favorável", "neutral": "⚪ Neutro", "worse": "🔴 Desfavorável"}
+            wi_color = wi_color_map.get(wi_class, "#8899aa")
+            wi_label = wi_label_map.get(wi_class, "⚪ Neutro")
+            val_html = f'<span style="color:#fff;font-weight:500;">{arrow} {compass_pt}</span>'
+            pct_html = f'<span style="background:{wi_color}22;color:{wi_color};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;">{wi_label}</span>'
+            bar_html = '<span style="color:#666;">—</span>'
+            # Count wind direction status for summary
+            if wi_class == "better":
+                status_counts["Normal"] += 1
+            elif wi_class == "worse":
+                status_counts["Extremo"] += 1
             else:
-                imp_html = '<span style="color:#555;font-size:0.9em;">—</span>'
+                status_counts["Elevado"] += 1
+        else:
+            val_html = f'{val:.3f}'
+            pct_html = f'<span style="background:{pc}22;color:{pc};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;{pulse}">{pl}</span>'
+            status_counts[pl] = status_counts.get(pl, 0) + 1
+            bar_html = f'''<div style="width:120px;height:10px;background:#1a1a2e;border-radius:5px;overflow:hidden;border:1px solid #2a2a4a;">
+                <div style="width:{min(pct,100):.0f}%;height:100%;background:{pc};border-radius:5px;"></div>
+            </div>'''
 
-            # Contribution display (always show for LogReg features)
-            if contrib is not None:
-                if contrib > 0.01:
-                    contrib_html = f'<span style="color:#F44336;font-weight:700;font-size:0.95em;">+{contrib:.2f} ↑</span>'
-                elif contrib < -0.01:
-                    contrib_html = f'<span style="color:#4CAF50;font-weight:700;font-size:0.95em;">{contrib:.2f} ↓</span>'
-                else:
-                    contrib_html = f'<span style="color:#8899aa;font-size:0.9em;">{contrib:+.2f}</span>'
-            else:
-                contrib_html = '<span style="color:#555;font-size:0.9em;">—</span>'
-
-            pct_colors = {"normal":"#4CAF50","elevated":"#F9A825","very_high":"#FF9800","extreme":"#F44336","critical":"#B71C1C"}
-            pct_labels = {"normal":"Normal","elevated":"Elevado","very_high":"Muito Alto","extreme":"Extremo","critical":"CRÍTICO"}
-            pc = pct_colors.get(cls, "#4CAF50")
-            pl = pct_labels.get(cls, "Normal")
-            pulse = "animation:pulse 1.5s infinite;" if cls == "critical" else ""
-
-            # Wind direction: show arrow + compass + impact classification from JSON
-            if ftype == "wind_dir" or (ftype == "off_model" and "wind_dir" in feat):
-                arrow = deg_to_arrow(val)
-                compass_pt = deg_to_compass_pt(val)
-                compass_abbr = deg_to_compass(val)
-                # Look up classification from wind_impact JSON
-                wi_class = "neutral"
-                wi_impact = 0.0
-                try:
-                    if feat in wind_impact.get("classification", {}) and compass_abbr in wind_impact["classification"][feat]:
-                        ci = wind_impact["classification"][feat][compass_abbr]
-                        wi_class = ci.get("class", "neutral")
-                        wi_impact = ci.get("avg_impact", 0.0)
-                except Exception:
-                    pass
-                wi_color_map = {"better": "#4CAF50", "neutral": "#8899aa", "worse": "#F44336"}
-                wi_label_map = {"better": "🟢 Favorável", "neutral": "⚪ Neutro", "worse": "🔴 Desfavorável"}
-                wi_color = wi_color_map.get(wi_class, "#8899aa")
-                wi_label = wi_label_map.get(wi_class, "⚪ Neutro")
-                val_html = f'<span style="color:#fff;font-weight:500;">{arrow} {compass_pt}</span>'
-                pct_html = f'<span style="background:{wi_color}22;color:{wi_color};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;">{wi_label}</span>'
-                bar_html = '<span style="color:#666;">—</span>'
-                # Count wind direction status for summary
-                if wi_class == "better":
-                    status_counts["Normal"] += 1
-                elif wi_class == "worse":
-                    status_counts["Extremo"] += 1
-                else:
-                    status_counts["Elevado"] += 1
-            else:
-                val_html = f'{val:.3f}'
-                pct_html = f'<span style="background:{pc}22;color:{pc};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;{pulse}">{pl}</span>'
-                status_counts[pl] = status_counts.get(pl, 0) + 1
-                bar_html = f'''<div style="width:120px;height:10px;background:#1a1a2e;border-radius:5px;overflow:hidden;border:1px solid #2a2a4a;">
-                    <div style="width:{min(pct,100):.0f}%;height:100%;background:{pc};border-radius:5px;"></div>
-                </div>'''
-
-            rows_html += f"""
+        rows_html += f"""
         <tr style="{row_bg}">
-            <td>
-                <div style="font-weight:500;{desc_style}">{meta['desc']}</div>
-                <div style="font-size:0.78em;color:#666;margin-top:2px;">{meta['interp']}</div>
-            </td>
-            <td style="font-weight:600;">{val_html}</td>
-            <td style="text-align:center;">{badge_html}</td>
-            <td>{contrib_html}</td>
-            <td>{imp_html}</td>
-            <td>{pct_html}</td>
+        <td>
+            <div style="font-weight:500;{desc_style}">{meta['desc']}</div>
+            <div style="font-size:0.78em;color:#666;margin-top:2px;">{meta['interp']}</div>
+        </td>
+        <td style="font-weight:600;">{val_html}</td>
+        <td style="text-align:center;">{badge_html}</td>
+        <td>{contrib_html}</td>
+        <td>{imp_html}</td>
+        <td>{pct_html}</td>
         </tr>"""
 
     # Build summary badges
