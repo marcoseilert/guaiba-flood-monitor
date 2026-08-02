@@ -62,7 +62,7 @@ SFS_LOGREG = {
     "sinos_sl_nivel_mean_lag1",
 }
 # Features exclusive to SFS LogReg (not in CatBoost/LightGBM models)
-OFF_MODEL_BIN = SFS_LOGREG - ALL_MODEL_FEATURES
+OFF_MODEL_BIN = SFS_LOGREG - set(ALL_MODEL_FEATURES)
 
 FEATURE_META = {
     # ── Chuva ──
