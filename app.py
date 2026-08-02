@@ -54,10 +54,15 @@ OFF_MODEL_1D = {
     "gravatai_sl_nivel_max", "encantado_precip_mm", "cachoeira_do_sul_wind_max_kmh",
     "cachoeira_do_sul_precip_mm", "catsul_nivel_max", "taquari_mucum_chuva_roll3",
     "rio_grande_v_wind",
-    # SFS LogReg+OptBin (classificação binária)
-    "sinos_cb_chuva_roll3", "sinos_sl_nivel_mean_lag3", "represamento_3d",
-    "rio_grande_v_wind_roll2", "jacui_rp_chuva_roll3", "sinos_sl_nivel_mean_lag1",
 }
+# SFS LogReg+OptBin features (binary classification)
+SFS_LOGREG = {
+    "sinos_sl_nivel_mean_lag5", "sinos_cb_chuva_roll3", "sinos_sl_nivel_mean_lag3",
+    "represamento_3d", "rio_grande_v_wind_roll2", "jacui_rp_chuva_roll3",
+    "sinos_sl_nivel_mean_lag1",
+}
+# Features exclusive to SFS LogReg (not in CatBoost/LightGBM models)
+OFF_MODEL_BIN = SFS_LOGREG - ALL_MODEL_FEATURES
 
 FEATURE_META = {
     # ── Chuva ──
@@ -498,12 +503,18 @@ def main():
             hovertemplate=f"Proj T+5: %{{y:.3f}}m<extra></extra>",
         ), secondary_y=False)
 
-    # ── Probability line (secondary Y-axis) ──
+    # ── Probability bars (secondary Y-axis) ──
     if "prob_extremo" in view_df.columns:
-        fig.add_trace(go.Scatter(
+        # Color bars by risk level
+        prob_colors = []
+        for p in view_df["prob_extremo"] * 100:
+            if p >= 20: prob_colors.append("#F44336")
+            elif p >= 5: prob_colors.append("#FF9800")
+            elif p >= 1: prob_colors.append("#F9A825")
+            else: prob_colors.append("rgba(156,39,176,0.3)")
+        fig.add_trace(go.Bar(
             x=view_df["date"], y=view_df["prob_extremo"] * 100,
-            mode="lines", name="P(extremo)",
-            line=dict(color="#9C27B0", width=2, dash="dash"),
+            name="P(extremo)", marker_color=prob_colors, opacity=0.6,
             hovertemplate="P(Δ>1m): %{y:.1f}%<extra></extra>",
         ), secondary_y=True)
 
