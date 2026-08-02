@@ -190,8 +190,9 @@ def load_dev_data():
 def run_update():
     """Run update_dataset.py to incrementally update the historical dataset."""
     import subprocess
+    import sys
     result = subprocess.run(
-        ["python", str(UPDATE_SCRIPT)],
+        [sys.executable, str(UPDATE_SCRIPT)],
         capture_output=True, text=True, cwd=str(PROJECT),
     )
     return result.returncode == 0, result.stdout + result.stderr
