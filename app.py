@@ -699,9 +699,11 @@ def main():
     severity_order = {"critical": 0, "extreme": 1, "very_high": 2, "elevated": 3, "normal": 4}
 
     all_feats_data = []
+    wi_severity_map = {"better": "normal", "neutral": "elevated", "worse": "extreme"}
     for grp in GROUP_ORDER:
         for feat, imp_val, is_extra, contrib in grouped.get(grp, []):
             meta = FEATURE_META[feat]
+            ftype = meta.get("type", "other")
             val = float(last[feat]) if feat in last.index and not pd.isna(last[feat]) else 0
             col_dev = dev_df[feat].dropna() if feat in dev_df.columns else pd.Series(dtype=float)
             pct = float((col_dev <= val).mean() * 100) if len(col_dev) > 0 else 0
@@ -710,6 +712,19 @@ def main():
             cb_imp = importance_map.get(feat, 0)
             lr_contrib = abs(contrib) if contrib is not None else 0
             is_off = 1 if (feat in EXTRA_KEYS or feat in OFF_MODEL_1D or feat in OFF_MODEL_3D) else 0
+
+            # Override severity for wind direction features
+            if ftype == "wind_dir":
+                compass_abbr = deg_to_compass(val)
+                try:
+                    if feat in wind_impact.get("classification", {}) and compass_abbr in wind_impact["classification"][feat]:
+                        wi_class = wind_impact["classification"][feat][compass_abbr].get("class", "neutral")
+                        cls = wi_severity_map.get(wi_class, "elevated")
+                        sev = severity_order.get(cls, 5)
+                        is_off = 0 if feat in FEATURES_5D_SET else 1
+                except Exception:
+                    pass
+
             all_feats_data.append((feat, imp_val, is_extra, contrib, val, pct, cls, sev, cb_imp, lr_contrib, is_off))
 
     # Sort: severity ASC > on-model first > CB importance DESC > LR contribution DESC
@@ -731,9 +746,8 @@ def main():
         badge_html = " ".join(badges) if badges else '<span style="color:#555;font-size:0.7em;">—</span>'
         if is_extra: n_extra += 1
 
-        # Highlight top 3 contributing features
-        is_top3 = feat in top3_contrib
-        if is_top3:
+        # Highlight by status severity (critical/extreme pulse)
+        if cls in ("critical", "extreme"):
             row_bg = "background:rgba(244,67,54,0.06);animation:risk_glow 2s infinite;"
         elif is_extra:
             row_bg = "background:rgba(255,152,0,0.04);"
@@ -782,8 +796,14 @@ def main():
                 pass
             wi_color_map = {"better": "#4CAF50", "neutral": "#8899aa", "worse": "#F44336"}
             wi_label_map = {"better": "🟢 Favorável", "neutral": "⚪ Neutro", "worse": "🔴 Desfavorável"}
+            wi_severity_map = {"better": "normal", "neutral": "elevated", "worse": "extreme"}
             wi_color = wi_color_map.get(wi_class, "#8899aa")
             wi_label = wi_label_map.get(wi_class, "⚪ Neutro")
+            # Override cls/sev for sorting with wind impact severity
+            cls = wi_severity_map.get(wi_class, "elevated")
+            sev = severity_order.get(cls, 5)
+            # Update is_off for sorting (wind dir features from CB model are on-model)
+            is_off = 0 if feat in FEATURES_5D_SET else 1
             val_html = f'<span style="color:#fff;font-weight:500;">{arrow} {compass_pt}</span>'
             pct_html = f'<span style="background:{wi_color}22;color:{wi_color};padding:3px 8px;border-radius:6px;font-size:0.8em;font-weight:600;">{wi_label}</span>'
             bar_html = '<span style="color:#666;">—</span>'
