@@ -432,7 +432,8 @@ def main():
     # ── Risk level classification ──
     risk_cls, risk_col, risk_emo = risk_level(current_prob)
 
-    col_sema, col_risk, col_t5 = st.columns(3)
+    # Row 1: Current level + T+5 projection
+    col_sema, col_t5 = st.columns(2)
 
     with col_sema:
         ac = alert_color(current_alert)
@@ -443,19 +444,6 @@ def main():
             <div style="font-size:1.8em;font-weight:800;color:{ac}">{current_nivel:.2f}m</div>
             <div style="font-size:0.85em;color:{ac}">{alert_emoji(current_alert)} {current_alert}</div>
             <div style="font-size:0.75em;color:#8899aa;">{trend_text} ({delta_1d:+.3f}m)</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col_risk:
-        prob_pct = current_prob * 100
-        risk_anim = "animation:risk_glow 1.5s infinite;" if current_prob >= 0.20 else ""
-        st.markdown(f"""
-        <div style="background:#1a1a2e;border:2px solid {risk_col};border-radius:12px;
-             padding:16px;text-align:center;{risk_anim}">
-            <div style="font-size:0.8em;color:#8899aa;">RISCO EXTREMO · {date_t0_str}</div>
-            <div style="font-size:1.8em;font-weight:800;color:{risk_col}">{prob_pct:.1f}%</div>
-            <div style="font-size:0.85em;color:{risk_col}">{risk_emo} {risk_cls}</div>
-            <div style="font-size:0.75em;color:#8899aa;">P(Δ5d > 1m)</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -470,6 +458,22 @@ def main():
             <div style="font-size:0.75em;color:#8899aa;">{t5_text} ({last_proj_T5 - current_nivel:+.3f}m)</div>
         </div>
         """, unsafe_allow_html=True)
+
+    # Separator
+    st.markdown("<hr style='border:none;border-top:1px solid #2a2a4a;margin:8px 0;'>", unsafe_allow_html=True)
+
+    # Row 2: Probability (separated)
+    prob_pct = current_prob * 100
+    risk_anim = "animation:risk_glow 1.5s infinite;" if current_prob >= 0.20 else ""
+    st.markdown(f"""
+    <div style="background:#1a1a2e;border:2px solid {risk_col};border-radius:12px;
+         padding:16px;text-align:center;max-width:400px;margin:0 auto;{risk_anim}">
+        <div style="font-size:0.8em;color:#8899aa;">RISCO EXTREMO · {date_t0_str}</div>
+        <div style="font-size:1.8em;font-weight:800;color:{risk_col}">{prob_pct:.1f}%</div>
+        <div style="font-size:0.85em;color:{risk_col}">{risk_emo} {risk_cls}</div>
+        <div style="font-size:0.75em;color:#8899aa;">P(Δ5d > 1m)</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("")
 
