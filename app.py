@@ -19,9 +19,6 @@ from pathlib import Path
 import json
 import pickle as pkl
 import time
-from optbinning import OptimalBinning
-from sklearn.linear_model import LogisticRegression
-from sklearn.impute import SimpleImputer
 
 # ── Config ───────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -207,30 +204,6 @@ def load_dev_data():
         df["guaiba_delta3"] = df["guaiba_nivel_mean"].diff(3)
     return df
 
-@st.cache_resource(show_spinner="Treinando modelo de classificação binária...")
-def load_binary_model():
-    """Load SFS features, fit OptimalBinning + LogisticRegression on DEV data."""
-    with open(PROJECT / "data" / "processed" / "sfs_results_logreg_optbin.json") as f:
-        ob_feats = json.load(f)["features"]
-
-    dev = pd.read_parquet(PROJECT / "data" / "processed" / "dataset_dev_v2.parquet")
-    dev["date"] = pd.to_datetime(dev["date"])
-    dev["target_bin"] = (dev["target_delta_5d"] > 1.0).astype(int)
-    dev = dev.dropna(subset=["target_delta_5d"])
-
-    binners = {}
-    for feat in ob_feats:
-        ob = OptimalBinning(name=feat, dtype="numerical", max_n_bins=4, min_bin_size=0.05)
-        ob.fit(dev[feat].values, dev["target_bin"].values)
-        binners[feat] = ob
-
-    X_train = np.column_stack([binners[feat].transform(dev[feat].values, metric="woe") for feat in ob_feats])
-    X_train = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_train)
-
-    model = LogisticRegression(max_iter=1000, random_state=42)
-    model.fit(X_train, dev["target_bin"].values)
-
-    return binners, model, ob_feats
 
 def run_update():
     """Run update_dataset.py to incrementally update the historical dataset."""
@@ -329,16 +302,10 @@ def main():
     else:
         st.sidebar.success("✅ Dados atualizados")
 
-    # ── Binary model: compute probabilities on full dataset ──
-    try:
-        binners, bin_model, ob_feats = load_binary_model()
-        X_bin = np.column_stack([binners[f].transform(chart_df[f].values, metric="woe") for f in ob_feats])
-        X_bin = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_bin)
-        chart_df["prob_extremo"] = bin_model.predict_proba(X_bin)[:, 1]
-        binary_model_ok = True
-    except Exception as e:
-        binary_model_ok = False
+    # ── Binary model: prob_extremo already in dataset ──
+    if "prob_extremo" not in chart_df.columns:
         chart_df["prob_extremo"] = 0.0
+    binary_model_ok = "prob_extremo" in chart_df.columns and chart_df["prob_extremo"].max() > 0
 
     # Horizon selector (removed — T+5 only)
 
@@ -648,23 +615,19 @@ def main():
 
     # Compute contributions for SFS features if binary model is loaded
     feature_contributions = {}  # feat -> (coef, woe, contribution)
+    # Load binary model feature list
+    try:
+        with open(PROJECT / "data" / "processed" / "sfs_results_logreg_optbin.json") as f:
+            ob_feats = json.load(f)["features"]
+    except Exception:
+        ob_feats = []
+
+    feature_contributions = {}
     if binary_model_ok:
-        try:
-            coefs = bin_model.coef_[0]  # shape (n_features,)
-            for i, feat in enumerate(ob_feats):
-                val_feat = float(last[feat]) if feat in last.index and not pd.isna(last.get(feat)) else np.nan
-                woe_val = binners[feat].transform(np.array([val_feat]), metric="woe")[0]
-                if np.isnan(woe_val):
-                    woe_val = 0.0
-                coef_val = coefs[i]
-                contrib = coef_val * woe_val
-                feature_contributions[feat] = {
-                    "coef": coef_val,
-                    "woe": woe_val,
-                    "contribution": contrib,
-                }
-        except Exception:
-            pass
+        for feat in ob_feats:
+            contrib_col = f"contrib_{feat}"
+            if contrib_col in last.index:
+                feature_contributions[feat] = {"contribution": float(last[contrib_col])}
 
     # Collect all features with their metadata, bucketed by group
     all_feats = sorted(set(ALL_MODEL_FEATURES) | EXTRA_KEYS | OFF_MODEL_1D)
