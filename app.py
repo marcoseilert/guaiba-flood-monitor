@@ -145,10 +145,11 @@ def deg_to_compass_pt(d):
     return mapping.get(deg_to_compass(d), "N/A")
 
 def deg_to_arrow(d):
-    """Return arrow emoji for degree value."""
+    """Return arrow emoji pointing WHERE the wind is going (not where it comes from)."""
     if pd.isna(d): return "❓"
-    mapping = {"N": "⬆️", "NE": "↗️", "E": "➡️", "SE": "↘️",
-               "S": "⬇️", "SW": "↙️", "W": "⬅️", "NW": "↖️"}
+    # Invert: wind FROM north → goes south (⬇️), etc.
+    mapping = {"N": "⬇️", "NE": "↙️", "E": "⬅️", "SE": "↖️",
+               "S": "⬆️", "SW": "↗️", "W": "➡️", "NW": "↘️"}
     return mapping.get(deg_to_compass(d), "❓")
 
 def alert_level(nivel):
