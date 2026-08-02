@@ -1,0 +1,49 @@
+{
+  "features": [
+    "sinos_sl_nivel_mean_lag5",
+    "sinos_cb_chuva_roll3",
+    "sinos_sl_nivel_mean_lag3",
+    "represamento_3d",
+    "rio_grande_v_wind_roll2",
+    "jacui_rp_chuva_roll3",
+    "sinos_sl_nivel_mean_lag1"
+  ],
+  "sfs_log": [
+    {
+      "step": 1,
+      "feature": "sinos_sl_nivel_mean_lag5",
+      "auc": 0.880343
+    },
+    {
+      "step": 2,
+      "feature": "sinos_cb_chuva_roll3",
+      "auc": 0.957263
+    },
+    {
+      "step": 3,
+      "feature": "sinos_sl_nivel_mean_lag3",
+      "auc": 0.980032
+    },
+    {
+      "step": 4,
+      "feature": "represamento_3d",
+      "auc": 0.987757
+    },
+    {
+      "step": 5,
+      "feature": "rio_grande_v_wind_roll2",
+      "auc": 0.99098
+    },
+    {
+      "step": 6,
+      "feature": "jacui_rp_chuva_roll3",
+      "auc": 0.993486
+    },
+    {
+      "step": 7,
+      "feature": "sinos_sl_nivel_mean_lag1",
+      "auc": 0.994854
+    }
+  ],
+  "best_auc": 0.9934856825953547
+}
