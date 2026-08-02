@@ -807,9 +807,9 @@ def main():
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">{meta['interp']}</div>
             </td>
             <td style="font-weight:600;">{val_html}</td>
-            <td>{pct_html}</td>
             <td>{contrib_html}</td>
             <td>{imp_html}</td>
+            <td>{pct_html}</td>
         </tr>"""
 
     # Build summary badges
@@ -838,9 +838,9 @@ def main():
         <tr style="border-bottom:2px solid #2a2a4a;">
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;">Variável</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Valor</th>
-            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Status</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Contribuição</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Importância</th>
+            <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Status</th>
         </tr>
     </thead>
     <tbody>{rows_html}</tbody>
