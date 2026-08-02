@@ -727,6 +727,16 @@ def main():
             cls = percentile_class(pct)
 
             is_extra = feat in EXTRA_KEYS or feat in OFF_MODEL_1D
+
+            # Model badges
+            in_cb = feat in FEATURES_5D
+            in_lgb = feat in FEATURES_3D
+            in_lr = feat in SFS_LOGREG
+            badges = []
+            if in_cb: badges.append('<span style="background:rgba(33,150,243,0.15);color:#64B5F6;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">CB</span>')
+            if in_lgb: badges.append('<span style="background:rgba(76,175,80,0.15);color:#81C784;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">LGB</span>')
+            if in_lr: badges.append('<span style="background:rgba(156,39,176,0.15);color:#CE93D8;padding:1px 5px;border-radius:4px;font-size:0.7em;font-weight:600;">LR</span>')
+            badge_html = " ".join(badges) if badges else '<span style="color:#555;font-size:0.7em;">—</span>'
             if is_extra: n_extra += 1
 
             # Highlight top 3 contributing features
@@ -807,6 +817,7 @@ def main():
                 <div style="font-size:0.78em;color:#666;margin-top:2px;">{meta['interp']}</div>
             </td>
             <td style="font-weight:600;">{val_html}</td>
+            <td style="text-align:center;">{badge_html}</td>
             <td>{contrib_html}</td>
             <td>{imp_html}</td>
             <td>{pct_html}</td>
@@ -838,6 +849,7 @@ def main():
         <tr style="border-bottom:2px solid #2a2a4a;">
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px;">Variável</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Valor</th>
+            <th style="text-align:center;padding:10px;color:#8899aa;font-size:0.8em;">Modelo</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Contribuição</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Importância</th>
             <th style="text-align:left;padding:10px;color:#8899aa;font-size:0.8em;">Status</th>
