@@ -796,10 +796,10 @@ def main():
             except Exception:
                 pass
             wi_color_map = {"better": "#4CAF50", "neutral": "#8899aa", "worse": "#F44336"}
-            wi_label_map = {"better": "🟢 Favorável", "neutral": "⚪ Neutro", "worse": "🔴 Desfavorável"}
+            wi_label_map = {"better": "Favorável", "neutral": "Neutro", "worse": "Desfavorável"}
             wi_severity_map = {"better": "normal", "neutral": "elevated", "worse": "extreme"}
             wi_color = wi_color_map.get(wi_class, "#8899aa")
-            wi_label = wi_label_map.get(wi_class, "⚪ Neutro")
+            wi_label = wi_label_map.get(wi_class, "Neutro")
             # Override cls/sev for sorting with wind impact severity
             cls = wi_severity_map.get(wi_class, "elevated")
             sev = severity_order.get(cls, 5)
