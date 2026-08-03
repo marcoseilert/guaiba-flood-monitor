@@ -1,9 +1,10 @@
+# DESATIVADO - Usar auto_update.py via Windows Task Scheduler
+# O GitHub Actions não consegue acessar a API da ANA corretamente
+
 name: Update Dataset
 
 on:
-  schedule:
-    - cron: '0 17,21 * * *'  # 14h,18h BRT
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:  # Apenas manual
 
 jobs:
   update:
