@@ -317,7 +317,8 @@ def main():
         st.sidebar.success("✅ Dados atualizados")
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("💡 **Como usar:** arraste o período ou digite as datas para navegar pelo histórico. Todos os indicadores, gráficos e variáveis atualizam para a data final selecionada. Experimente datas de eventos conhecidos (ex: 05/05/2024) para fazer backtests.")
+    st.sidebar.markdown("💡 **Como usar:** arraste o período ou digite as datas para navegar pelo histórico. Todos os indicadores atualizam para a data final selecionada.")
+    st.sidebar.markdown("🔬 **Backtest sugerido:** tente **30/04/2024** como data final — 5 dias antes do pico histórico de 5,37m para ver como o sistema teria se comportado antes da enchente.")
 
     # ── Binary model: prob_extremo already in dataset ──
     if "prob_extremo" not in chart_df.columns:
