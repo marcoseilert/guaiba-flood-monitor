@@ -15,6 +15,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import json
 import pickle as pkl
@@ -307,7 +308,7 @@ def main():
 
     chart_df = historico.copy()
     last_date = chart_df["date"].max().date()
-    today = datetime.now().date()
+    today = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     days_behind = (today - last_date).days
 
     st.sidebar.caption(f"📂 Dados: {chart_df['date'].min().date()} → {last_date} ({len(chart_df)} dias)")
