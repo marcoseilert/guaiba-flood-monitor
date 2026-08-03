@@ -458,7 +458,7 @@ def update_dataset():
 
         # ── Binary model predictions ──
         binary_model_path = models_dir / "binary_model.pkl"
-        ob_feats_path = PROJECT / "data" / "processed" / "sfs_results_logreg_optbin.json"
+        ob_feats_path = PROJECT_ROOT / "data" / "processed" / "sfs_results_logreg_optbin.json"
         if binary_model_path.exists() and ob_feats_path.exists():
             import json
             from sklearn.impute import SimpleImputer
