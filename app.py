@@ -407,7 +407,7 @@ def main():
 
     # ── Header ──
     st.markdown(f"# 🌊 Monitor de Enchentes — Rio Guaíba")
-    st.caption(f"📅 Todos os dados exibidos referem-se a **{pd.Timestamp(last['date']).strftime('%d/%m/%Y')}** (data final selecionada) · {len(chart_df)} dias de histórico · Altere o período no menu lateral para navegar ou fazer backtests")
+    st.caption(f"📅 Todos os dados exibidos referem-se a **{pd.Timestamp(last['date']).strftime('%d/%m/%Y')}** (data final selecionada) · Altere o período no menu lateral para navegar ou fazer backtests · Consulte o glossário ao final da página")
 
     # ── Cards de status ──
     # Compute target dates
@@ -880,6 +880,9 @@ def main():
         ("🏞️", "Bacia", "A área de terra onde a chuva cai e escorre para o rio. Cada rio tem sua bacia."),
         ("📊", "Percentil", "Se o valor está no percentil 95, significa que ele é maior que 95% dos valores históricos — bem acima do normal."),
         ("📐", "Z-score", "Quantos desvios padrão o valor está da média. Z=3 significa 3x acima do normal — muito raro."),
+        ("🎯", "Importância", "Quanto cada variável pesa na previsão do modelo CatBoost (0-100%). Variáveis com maior importância têm mais influência no resultado."),
+        ("⚖️", "Contribuição", "Quanto cada variável do modelo LogReg está puxando o risco para cima (+) ou para baixo (-). Valores positivos vermelhos aumentam a probabilidade de evento extremo; valores negativos verdes reduzem."),
+        ("🏷️", "Modelo (CB/LR)", "Indica qual modelo usa a variável: CB = CatBoost (regressão de nível), LR = LogReg+OptBin (classificação de risco). Variáveis sem badge são off-model."),
     ]
 
     cols = st.columns(5)
