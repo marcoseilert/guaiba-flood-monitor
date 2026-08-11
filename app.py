@@ -400,7 +400,11 @@ def main():
 
     current_nivel = float(last["guaiba_nivel_mean"])
     current_alert = alert_level(current_nivel)
-    current_prob = float(last.get("prob_extremo", 0))
+    raw_prob = last.get("prob_extremo", 0)
+    # The most recent row can lack enough upstream observations for the
+    # binary model. Treat that as unavailable instead of displaying nan% and
+    # classifying NaN as critical (all comparisons with NaN are false).
+    current_prob = float(raw_prob) if pd.notna(raw_prob) else None
     # Compute delta_1d from view data
     if len(view_df) >= 2:
         delta_1d = float(view_df.iloc[-1]["guaiba_nivel_mean"] - view_df.iloc[-2]["guaiba_nivel_mean"])
@@ -435,7 +439,10 @@ def main():
     t5_text, t5_color = proj_trend(last_proj_T5, current_nivel)
 
     # ── Risk level classification ──
-    risk_cls, risk_col, risk_emo = risk_level(current_prob)
+    if current_prob is None:
+        risk_cls, risk_col, risk_emo = "Indisponível", "#8899aa", "⚪"
+    else:
+        risk_cls, risk_col, risk_emo = risk_level(current_prob)
 
     # Row 1: Current level + T+5 projection
     col_sema, col_t5 = st.columns(2)
@@ -468,15 +475,17 @@ def main():
     st.markdown("<hr style='border:none;border-top:1px solid #2a2a4a;margin:8px 0;'>", unsafe_allow_html=True)
 
     # Row 2: Probability (separated)
-    prob_pct = current_prob * 100
-    risk_anim = "animation:risk_glow 1.5s infinite;" if current_prob >= 0.20 else ""
+    prob_pct = current_prob * 100 if current_prob is not None else None
+    risk_anim = "animation:risk_glow 1.5s infinite;" if current_prob is not None and current_prob >= 0.20 else ""
+    prob_display = f"{prob_pct:.1f}%" if prob_pct is not None else "—"
+    prob_note = "P(Δ5d > 1m)" if current_prob is not None else "Sem dados suficientes para calcular"
     st.markdown(f"""
     <div style="background:#1a1a2e;border:2px solid {risk_col};border-radius:12px;
          padding:16px;text-align:center;max-width:400px;margin:0 auto;{risk_anim}">
         <div style="font-size:0.8em;color:#8899aa;">PROBABILIDADE DE Δ > 1m EM T+5 · {date_t0_str}</div>
-        <div style="font-size:1.8em;font-weight:800;color:{risk_col}">{prob_pct:.1f}%</div>
+        <div style="font-size:1.8em;font-weight:800;color:{risk_col}">{prob_display}</div>
         <div style="font-size:0.85em;color:{risk_col}">{risk_emo} {risk_cls}</div>
-        <div style="font-size:0.75em;color:#8899aa;">P(Δ5d > 1m)</div>
+        <div style="font-size:0.75em;color:#8899aa;">{prob_note}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -521,19 +530,19 @@ def main():
     if "prob_extremo" in view_df.columns:
         # Color bars by risk level
         prob_colors = []
-        for p in view_df["prob_extremo"] * 100:
+        for p in view_df["prob_extremo"].fillna(0) * 100:
             if p >= 20: prob_colors.append("#F44336")
             elif p >= 5: prob_colors.append("#FF9800")
             elif p >= 1: prob_colors.append("#F9A825")
             else: prob_colors.append("rgba(156,39,176,0.3)")
         fig.add_trace(go.Bar(
-            x=view_df["date"], y=view_df["prob_extremo"] * 100,
+            x=view_df["date"], y=view_df["prob_extremo"].fillna(0) * 100,
             name="P(extremo)", marker_color=prob_colors, opacity=0.6,
             hovertemplate="P(Δ>1m): %{y:.1f}%<extra></extra>",
         ), secondary_y=True)
 
         # Threshold reference lines on secondary axis
-        prob_max = max(view_df["prob_extremo"].max() * 100 * 1.2, 25)
+        prob_max = max(view_df["prob_extremo"].fillna(0).max() * 100 * 1.2, 25)
         for thresh, lbl in [(1, "1%"), (5, "5%"), (20, "20%")]:
             fig.add_hline(y=thresh, line_dash="dot", line_color="rgba(156,39,176,0.3)", line_width=1,
                           annotation_text=lbl, annotation_position="top right",
@@ -674,7 +683,7 @@ def main():
     rows_html = ""
     n_extra = 0
     status_counts = {"Normal": 0, "Elevado": 0, "Muito Alto": 0, "Extremo": 0, "CRÍTICO": 0}
-    is_elevated_risk = current_prob >= 0.05
+    is_elevated_risk = current_prob is not None and current_prob >= 0.05
 
     # Count contributing features
     n_contributing = sum(1 for v in feature_contributions.values() if v["contribution"] > 0)

@@ -15,7 +15,7 @@ Dashboard de previsão de enchentes do Rio Guaíba em Porto Alegre, RS.
 - Badges indicando modelo de cada variável (CB / LR)
 - Análise de impacto da direção do vento (rosa dos ventos)
 - Ícones dinâmicos de precipitação (☀️⛅🌤️🌧️⛈️)
-- Atualização automática dos dados (GitHub Actions, 4x/dia)
+- Atualização automática dos dados (Windows Task Scheduler, 2x/dia)
 - Glossário visual para não-técnicos
 
 ## 🏗️ Arquitetura
@@ -72,11 +72,11 @@ docs/                     # Documentação técnica
 
 ## 🔄 Atualização
 
-O dataset é atualizado automaticamente via GitHub Actions **4x ao dia** (02h, 08h, 14h, 20h horário de Brasília).
+O dataset é atualizado automaticamente no Windows via **Task Scheduler, 2x ao dia** (14h e 18h, horário de Brasília). A tarefa chama `auto_update.py`, que busca os dados, recalcula as previsões e publica o dataset no GitHub. O workflow do GitHub Actions permanece desativado porque a API da ANA não funciona de forma confiável no runner do GitHub.
 
 Para atualizar manualmente:
 ```bash
-python update_dataset.py
+python auto_update.py
 ```
 
 ## 🛠️ Desenvolvimento
@@ -88,8 +88,8 @@ pip install -r requirements.txt
 # Rodar localmente
 streamlit run app.py
 
-# Atualizar dados
-python update_dataset.py
+# Atualizar dados e publicar no GitHub
+python auto_update.py
 ```
 
 ## 📖 Documentação

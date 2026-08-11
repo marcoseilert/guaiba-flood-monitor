@@ -44,13 +44,24 @@ def run():
     
     # Step 2: Git add + commit
     log("Commitando...")
-    subprocess.run(["git", "add", "data/processed/dataset_historico.parquet"], cwd=str(PROJECT))
+    add_result = subprocess.run(
+        ["git", "add", "data/processed/dataset_historico.parquet", "models/binary_model.pkl"],
+        cwd=str(PROJECT),
+        capture_output=True,
+        text=True,
+    )
+    if add_result.returncode != 0:
+        log(f"ERRO no git add: {add_result.stderr[:500]}")
+        return False
     result = subprocess.run(
         ["git", "commit", "-m", f"data: auto-update {datetime.now().strftime('%d/%m/%Y %H:%M')}"],
         cwd=str(PROJECT),
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0 and "nothing to commit" not in result.stdout and "nothing to commit" not in result.stderr:
+        log(f"ERRO no commit: {result.stderr[:500]}")
+        return False
     if "nothing to commit" in result.stdout or "nothing to commit" in result.stderr:
         log("Nada para commitar")
     else:
