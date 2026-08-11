@@ -31,6 +31,7 @@ st.set_page_config(
 
 PROJECT = Path(__file__).resolve().parent
 DATASET_PATH = PROJECT / "data" / "processed" / "dataset_historico.parquet"
+DATASET_CACHE_VERSION = "2026-08-10"
 UPDATE_SCRIPT = PROJECT / "update_dataset.py"
 
 # ── Feature definitions ──────────────────────────────────────────────────────
@@ -200,7 +201,7 @@ def risk_level(prob):
 
 # ── Data loading (cached) ────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner="Carregando dados históricos...")
-def load_historico():
+def load_historico(cache_version=DATASET_CACHE_VERSION):
     """Load the unified historical dataset."""
     if not DATASET_PATH.exists():
         return None
@@ -209,7 +210,7 @@ def load_historico():
     return df
 
 @st.cache_data(ttl=3600, show_spinner="Carregando dados históricos para estatísticas...")
-def load_dev_data():
+def load_dev_data(cache_version=DATASET_CACHE_VERSION):
     """Load historical dataset for statistics (percentiles)."""
     df = pd.read_parquet(DATASET_PATH)
     df["date"] = pd.to_datetime(df["date"])
