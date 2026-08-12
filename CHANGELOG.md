@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-12
+
+- Corrigido o executável usado pelo Windows Task Scheduler: `atualizar_dataset.bat` passa a chamar explicitamente o Python do ambiente Hermes (`C:\\Users\\User\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe`), que contém `numpy`, `pandas` e `pyarrow`. O Python do uv não tinha `numpy`, causando falha nas execuções de 11/08/2026.
+
 ## 2026-08-10
 
 - Invalidado o cache de dados do Streamlit após a atualização do parquet, para que o dashboard passe a recarregar o dataset publicado quando a versão dos dados mudar.
