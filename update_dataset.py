@@ -8,6 +8,7 @@ Reads the existing unified dataset, fetches new data from the last available
 date to today, appends it, recomputes targets (backfill T+3/T+5), and saves.
 """
 
+import json
 import os
 import pickle
 import sys
@@ -72,6 +73,112 @@ UPSTREAM_NAMES = {
     "86510000": "taquari_mucum",
     "85900000": "jacui_rp",
 }
+
+# ── Fallback nivelguaiba.com.br (fonte alternativa para guaiba_nivel_mean) ──
+NIVELGUAIBA_JSON_URL = "https://nivelguaiba.com.br/portoalegre.7days.json"
+FALLBACK_MAX_DAYS = 3          # nunca reescreve histórico além disso
+FALLBACK_BIAS_LIMIT_M = 1.0    # sanity: bias ANA vs nivelguaiba plausivel
+FALLBACK_MIN_OBS = 48          # dia do site c/ <48 leituras (12h) = parcial, nao usar
+
+
+# ══════════════════════════════════════════════════════════════
+# FALLBACK: nivelguaiba.com.br (quando ANA não publica o nível)
+# ══════════════════════════════════════════════════════════════
+def fetch_nivelguaiba_daily():
+    """Busca leituras 15min de https://nivelguaiba.com.br (últimos 7 dias).
+
+    Retorna DataFrame date|lvl_mean|lvl_max|n_obs ou DataFrame vazio.
+    Nível já em metros na régua Porto Alegre do site.
+    """
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = requests.get(NIVELGUAIBA_JSON_URL, timeout=60)
+            resp.raise_for_status()
+            raw = json.loads(resp.text)
+            break
+        except Exception as e:
+            if attempt == MAX_RETRIES:
+                print(f"    [ERROR] nivelguaiba.com.br: {e}")
+                return pd.DataFrame()
+            time.sleep(RETRY_DELAY * attempt)
+
+    rows = [(k, float(v)) for k, v in raw.items() if v is not None]
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows, columns=["datetime", "nivel_m"])
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df = df.dropna(subset=["datetime"])
+    daily = df.groupby(df["datetime"].dt.date).agg(
+        nivel_mean_m=("nivel_m", "mean"),
+        nivel_max_m=("nivel_m", "max"),
+        n_obs=("nivel_m", "count"),
+    ).reset_index().rename(columns={"datetime": "date"})
+    daily["date"] = pd.to_datetime(daily["date"])
+    return daily
+
+
+def apply_nivelguaiba_fallback(combined, calibration=None):
+    """Preenche guaiba_nivel_mean/max/chuva ausentes nos últimos dias com
+    dados de nivelguaiba.com.br, calibrados pelo bias ANA vs site observado
+    nos dias de overlap recentes.
+
+    - Só os últimos FALLBACK_MAX_DAYS dias (nunca reescreve histórico antigo).
+    - `calibration`: DataFrame histórico (ex.: dataset existente) p/ calcular
+      bias mesmo quando o buffer atual não cobre os dias com ANA válida.
+    - Auto-curável: se a ANA publicar os valores depois, a próxima rodada
+      reprocessa esses dias (buffer de 60d) e sobrescreve a estimativa.
+    """
+    lvl_col = "guaiba_nivel_mean"
+    missing_days = combined.loc[
+        combined[lvl_col].isna()
+        & (combined["date"] >= combined["date"].max() - pd.Timedelta(days=FALLBACK_MAX_DAYS)),
+        "date",
+    ]
+    if missing_days.empty:
+        return combined, []
+
+    site = fetch_nivelguaiba_daily()
+    if site.empty:
+        print("  [FALLBACK] nivelguaiba.com.br indisponivel — sem dados para preencher")
+        return combined, []
+
+    # Bias calibrado nos dias em que ANA e site coexistem (últimos 30 dias):
+    calib_frames = []
+    if calibration is not None and not calibration.empty:
+        calib_frames.append(calibration.tail(60)[["date", lvl_col]])
+    calib_frames.append(combined.tail(30)[["date", lvl_col]])
+    recent = pd.concat(calib_frames).drop_duplicates("date", keep="last").dropna(subset=[lvl_col])
+    merged = recent.merge(site[["date", "nivel_mean_m"]], on="date")
+    if len(merged) >= 2:
+        bias = float((merged[lvl_col] - merged["nivel_mean_m"]).median())
+        if abs(bias) > FALLBACK_BIAS_LIMIT_M:
+            print(f"  [FALLBACK] bias anomalo ({bias:+.2f}m) fora do sanity — descartando fallback")
+            return combined, []
+    else:
+        bias = 0.0
+        print("  [FALLBACK] sem overlap p/ calibrar bias — usando site cru")
+
+    filled_dates = []
+    site_dates = pd.to_datetime(site["date"]).dt.normalize()
+    for d in missing_days:
+        row_idx = site_dates[site_dates == d.normalize()].index
+        if len(row_idx) == 0:
+            continue
+        srow = site.iloc[row_idx[0]]
+        # Dia parcial (poucas leituras, ex.: madrugada) não é confiável p/ média diária
+        if pd.isna(srow["nivel_mean_m"]) or int(srow.get("n_obs", 0)) < FALLBACK_MIN_OBS:
+            continue
+        i = combined.index[combined["date"] == d][0]
+        adj = float(srow["nivel_mean_m"]) + bias
+        combined.at[i, lvl_col] = round(adj, 4)
+        max_col = "guaiba_nivel_max"
+        if max_col in combined.columns and pd.isna(combined.at[i, max_col]):
+            combined.at[i, max_col] = round(float(srow["nivel_max_m"]) + bias, 4)
+        filled_dates.append(str(d.date()))
+
+    if filled_dates:
+        print(f"  [FALLBACK] preenchido via nivelguaiba.com.br (bias {bias:+.3f}m): {', '.join(filled_dates)}")
+    return combined, filled_dates
 
 
 # ══════════════════════════════════════════════════════════════
@@ -398,6 +505,24 @@ def update_dataset():
         df = df.merge(meteo_df, on="date", how="left")
 
     print(f"  Base shape: {df.shape}")
+
+    # ── STEP 3.5: Fallback nivelguaiba.com.br p/ nível sem ANA ──
+    if "guaiba_nivel_mean" in df.columns:
+        df = apply_nivelguaiba_fallback(df, calibration=existing)[0]
+        print(f"  Base shape pos-fallback: {df.shape}")
+
+    # ── STEP 3.6: nunca manter linhas além do último dia com nível válido —
+    # evita comitar linha vazia do dia corrente quando nenhuma fonte publicou.
+    # Linhas internas com NaN são mantidas (gaps históricos legítimos).
+    if "guaiba_nivel_mean" in df.columns:
+        valid_dates = df.loc[df["guaiba_nivel_mean"].notna(), "date"]
+        if not valid_dates.empty:
+            last_valid = valid_dates.max()
+            trimmed = df[df["date"] <= last_valid]
+            dropped = len(df) - len(trimmed)
+            if dropped > 0:
+                print(f"  [TRIM] {dropped} linha(s) sem nivel apos {last_valid.date()} removida(s)")
+            df = trimmed
 
     # ── STEP 4: Build features ──
     print("\n[STEP 4] Building all features ...")
