@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-15
+
+- Gráfico: removida a linha "Realizado T+5"; a projeção T+5 e as barras de probabilidade passam a ser plotadas na data projetada (data-base + 5 dias), com a linha pontilhada avançando além do último dado real.
+- Adicionado divisor vertical tracejado ("Fim do dado real · projeção →") marcando o início da região projetada, com eixo x estendido 5 dias à frente.
+- Glossário: entrada "Realizado" removida e definição de "Projeção" atualizada.
+
 ## 2026-08-15
 
 - Adicionado alerta ntfy no `auto_update.py`: após a atualização/publicação do dataset, a projeção T+5 mais recente acima de 2,50 m é enviada ao tópico `alertas_mosoeilert`.

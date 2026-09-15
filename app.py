@@ -493,10 +493,12 @@ def main():
     st.markdown("")
 
     # ── Main Chart ──
-    # Compute realized levels (actual level at D+N)
+    # Projeção plotada na data-alvo (T0 + 5 dias) — aponta para o futuro
     view_df = view_df.copy()
-    view_df["realizado_TN"] = view_df["guaiba_nivel_mean"].shift(-5)
     proj_col = "proj_T5"
+    SHIFT_DAYS = 5
+    proj_x = (view_df["date"] + pd.Timedelta(days=SHIFT_DAYS)) if len(view_df) > 0 else view_df["date"]
+    proj_x_max = proj_x.max() if len(proj_x) > 0 else view_df["date"].max()
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -509,22 +511,13 @@ def main():
         hovertemplate="%{x|%d/%m/%Y}: %{y:.3f}m<extra></extra>",
     ), secondary_y=False)
 
-    # Realizado T+N — dark blue solid
-    fig.add_trace(go.Scatter(
-        x=view_df["date"], y=view_df["realizado_TN"],
-        mode="lines+markers", name=f"Realizado T+5",
-        line=dict(color="#0D47A1", width=2.5),
-        marker=dict(size=5, color="#0D47A1"),
-        hovertemplate=f"Real T+5: %{{y:.3f}}m<extra></extra>",
-    ), secondary_y=False)
-
-    # Projeção T+N — light blue dashed
+    # Projeção T+5 — light blue dotted, plotada na data projetada
     if proj_col in view_df.columns:
         fig.add_trace(go.Scatter(
-            x=view_df["date"], y=view_df[proj_col],
-            mode="lines", name=f"Projeção T+5",
+            x=proj_x, y=view_df[proj_col],
+            mode="lines", name="Projeção T+5",
             line=dict(color="#64B5F6", width=1.5, dash="dot"),
-            hovertemplate=f"Proj T+5: %{{y:.3f}}m<extra></extra>",
+            hovertemplate="Projeção para %{x|%d/%m/%Y}: %{y:.3f}m<extra></extra>",
         ), secondary_y=False)
 
     # ── Probability bars (secondary Y-axis) ──
@@ -537,9 +530,9 @@ def main():
             elif p >= 1: prob_colors.append("#F9A825")
             else: prob_colors.append("rgba(156,39,176,0.3)")
         fig.add_trace(go.Bar(
-            x=view_df["date"], y=view_df["prob_extremo"].fillna(0) * 100,
+            x=proj_x, y=view_df["prob_extremo"].fillna(0) * 100,
             name="P(extremo)", marker_color=prob_colors, opacity=0.6,
-            hovertemplate="P(Δ>1m): %{y:.1f}%<extra></extra>",
+            hovertemplate="P(Δ>1m em 5d): %{y:.1f}%<extra></extra>",
         ), secondary_y=True)
 
         # Threshold reference lines on secondary axis
@@ -565,10 +558,21 @@ def main():
                            (2,3,"rgba(255,152,0,0.04)"),(3,ymax,"rgba(244,67,54,0.06)")]:
         fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, secondary_y=False)
 
+    # Divisor: fim do dado real → início da região projetada
+    if proj_col in view_df.columns and len(view_df) > 0:
+        last_real = view_df["date"].max()
+        fig.add_vline(
+            x=last_real, line_dash="dash", line_color="rgba(100,181,246,0.85)", line_width=1.5,
+            annotation_text="Fim do dado real · projeção →",
+            annotation_position="top left",
+            annotation_font_size=10, annotation_font_color="#64B5F6",
+        )
+        fig.update_xaxes(range=[view_df["date"].min(), proj_x_max])
+
     fig.update_layout(
         height=560,
         title=dict(
-            text=f"Nível do Guaíba e Projeção T+5<br><sup style='color:#8899aa'>Comparação entre realizado e previsto pelo modelo · Período: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}</sup>",
+            text=f"Nível do Guaíba e Projeção T+5<br><sup style='color:#8899aa'>Projeção plotada na data projetada (5 dias à frente) · Período: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}</sup>",
             font=dict(color="#fff", size=16),
             x=0.01, xanchor="left",
         ),
@@ -884,8 +888,7 @@ def main():
     glossary = [
         ("🌊", "Nível", "Quão alto está a água do rio, medido em metros. Quando passa de 3 metros, há risco de inundação."),
         ("📈", "Delta", "Quanto o nível vai subir ou descer nos próximos dias. Se o delta é +1.5m, a água vai subir 1.5 metros."),
-        ("🔮", "Projeção", "O que o modelo prevê para o nível nos próximos dias. Linha tracejada azul claro no gráfico."),
-        ("✅", "Realizado", "O nível que de fato aconteceu N dias depois. Linha sólida azul escuro no gráfico. Só existe para datas passadas."),
+        ("🔮", "Projeção", "O que o modelo prevê para o nível 5 dias à frente. Linha tracejada azul claro, plotada na data projetada — à direita da linha vertical pontilhada ficam as projeções para os próximos dias."),
         ("🚦", "Cota", "O limite oficial de segurança. Cada cor do semáforo representa uma cota diferente."),
         ("⚠️", "Alerta", "Quando o nível previsto passa de 2 metros, a Defesa Civil entra em ação para preparar a cidade."),
         ("🌬️", "Represamento", "Quando o vento forte empurra a água da Lagoa dos Patos para dentro do Guaíba, impedindo que ela saia."),

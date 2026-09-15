@@ -7,7 +7,7 @@ Dashboard de previsão de enchentes do Rio Guaíba em Porto Alegre, RS.
 ## 📊 Funcionalidades
 
 - Gráfico interativo do nível do Guaíba com projeção T+5
-- Comparação entre realizado e previsto pelo modelo
+- Projeção T+5 plotada na data projetada (data-base + 5 dias), com divisor entre dado real e futuro
 - **Classificação binária** de probabilidade de evento extremo (Δ > 1m)
 - Barras de probabilidade no gráfico com cores por nível de risco
 - Painel de variáveis com ordenação dinâmica por severidade
