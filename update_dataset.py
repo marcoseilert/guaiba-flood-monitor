@@ -61,6 +61,13 @@ RAIN_WINDOWS     = [3, 7, 14, 30, 60]
 WIND_ROLLING     = [1, 2, 3]
 FORECAST_HORIZONS = [1, 2, 3, 5]
 
+# Janela de escrita (gravada no dataset) + contexto extra p/ lags/rolling.
+# O contexto é buscado mas NÃO gravado: existe apenas para que a 1ª linha da
+# janela de escrita tenha histórico suficiente (sem ele, a última gravação de
+# cada linha — feita quando ela vira a 1ª da fatia — congelava NaN).
+WRITE_WINDOW_DAYS = 60
+CONTEXT_DAYS      = 60
+
 MAX_RETRIES = 5
 RETRY_DELAY = 5
 
@@ -387,6 +394,74 @@ def build_all_features(df):
 # ══════════════════════════════════════════════════════════════
 # INCREMENTAL UPDATE
 # ══════════════════════════════════════════════════════════════
+def compute_predictions(combined):
+    """Carrega os modelos congelados e grava pred_delta_*/proj_T*/prob_extremo (+contrib/woe/bin).
+
+    Linhas com features faltantes ficam com pred/proj NaN (mesmo comportamento do updater).
+    """
+    models_dir = PROJECT_ROOT / "models"
+    model_3d_path = models_dir / "model_delta_3d.pkl"
+    model_5d_path = models_dir / "model_delta_5d.pkl"
+    meta_path = models_dir / "model_metadata.pkl"
+
+    if model_3d_path.exists() and model_5d_path.exists() and meta_path.exists():
+        with open(meta_path, "rb") as f:
+            meta = pickle.load(f)
+        features_3d = meta["features_3d"]
+        features_5d = meta["features_5d"]
+
+        with open(model_3d_path, "rb") as f:
+            model_3d = pickle.load(f)
+        with open(model_5d_path, "rb") as f:
+            model_5d = pickle.load(f)
+
+        # Only predict where features are available
+        mask_3d = combined[features_3d].notna().all(axis=1)
+        mask_5d = combined[features_5d].notna().all(axis=1)
+
+        combined.loc[mask_3d, "pred_delta_3d"] = model_3d.predict(combined.loc[mask_3d, features_3d].values)
+        combined.loc[mask_5d, "pred_delta_5d"] = model_5d.predict(combined.loc[mask_5d, features_5d].values)
+        combined["proj_T3"] = combined["guaiba_nivel_mean"] + combined["pred_delta_3d"]
+        combined["proj_T5"] = combined["guaiba_nivel_mean"] + combined["pred_delta_5d"]
+
+        print(f"  Predictions: {mask_3d.sum()} T+3, {mask_5d.sum()} T+5")
+
+        # ── Binary model predictions ──
+        binary_model_path = models_dir / "binary_model.pkl"
+        ob_feats_path = PROJECT_ROOT / "data" / "processed" / "sfs_results_logreg_optbin.json"
+        if binary_model_path.exists() and ob_feats_path.exists():
+            import json
+            from sklearn.impute import SimpleImputer
+            with open(binary_model_path, "rb") as f:
+                bm = pickle.load(f)
+            with open(ob_feats_path) as f:
+                ob_feats = json.load(f)["features"]
+            bm_binners = bm["binners"]
+            bm_model = bm["model"]
+            bm_coefs = bm_model.coef_[0]
+            mask_bin = combined[ob_feats].notna().all(axis=1)
+            X_bin = np.column_stack([bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe") for f in ob_feats])
+            X_bin = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_bin)
+            combined.loc[mask_bin, "prob_extremo"] = bm_model.predict_proba(X_bin)[:, 1]
+            # Contributions
+            for i, f in enumerate(ob_feats):
+                woe = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe")
+                combined.loc[mask_bin, f"contrib_{f}"] = bm_coefs[i] * woe
+                bin_idx = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="indices")
+                bt = bm_binners[f].binning_table.build()
+                bin_labels = list(bt["Bin"])
+                combined.loc[mask_bin, f"woe_{f}"] = woe
+                combined.loc[mask_bin, f"bin_{f}"] = [bin_labels[int(j)] if 0 <= int(j) < len(bin_labels) else "N/A" for j in bin_idx]
+            print(f"  Binary model: {mask_bin.sum()} predictions")
+        else:
+            combined["prob_extremo"] = 0.0
+            print("  [WARN] Binary model not found — skipping prob_extremo")
+    else:
+        print("  [WARN] Models not found — skipping predictions")
+
+    return combined
+
+
 def update_dataset():
     """Incremental update: read existing, fetch missing days, append, recompute targets."""
     t0 = time.time()
@@ -405,11 +480,12 @@ def update_dataset():
 
     # Determine date range to fetch
     if last_date is not None:
-        # Start 60 days before last_date to ensure rolling features are correct
-        fetch_start = last_date - timedelta(days=60)
+        write_start = last_date - timedelta(days=WRITE_WINDOW_DAYS)
+        fetch_start = write_start - timedelta(days=CONTEXT_DAYS)
         fetch_end = today
-        print(f"Fetching: {fetch_start} to {fetch_end} (incremental + buffer)")
+        print(f"Fetching: {fetch_start} to {fetch_end} (grava de {write_start} em diante)")
     else:
+        write_start = None
         fetch_start = datetime(2019, 1, 1).date()
         fetch_end = today
         print(f"Fetching: {fetch_start} to {fetch_end} (full build)")
@@ -529,11 +605,18 @@ def update_dataset():
     df = build_all_features(df)
     print(f"  With features: {df.shape}")
 
+    # ── STEP 4.5: descartar a região de contexto — só a janela de escrita
+    # é gravada; o contexto serviu só para lags/rolling corretos.
+    if write_start is not None:
+        before_n = len(df)
+        df = df[df["date"] >= pd.Timestamp(write_start)].reset_index(drop=True)
+        print(f"  [CONTEXT] {before_n - len(df)} linha(s) de contexto descartada(s); gravando a partir de {write_start}")
+
     # ── STEP 5: Merge with existing ──
     if existing is not None:
         print("\n[STEP 5] Merging with existing dataset ...")
-        # Remove overlapping dates from existing (recompute from buffer start)
-        buffer_start = pd.Timestamp(fetch_start)
+        # Remove overlapping dates from existing (recompute from write window start)
+        buffer_start = pd.Timestamp(write_start if write_start is not None else fetch_start)
         existing_clean = existing[existing["date"] < buffer_start].copy()
 
         # Concatenate
@@ -554,65 +637,7 @@ def update_dataset():
 
     # ── STEP 6: Predict with saved models ──
     print("\n[STEP 6] Computing predictions with saved models ...")
-    models_dir = PROJECT_ROOT / "models"
-    model_3d_path = models_dir / "model_delta_3d.pkl"
-    model_5d_path = models_dir / "model_delta_5d.pkl"
-    meta_path = models_dir / "model_metadata.pkl"
-
-    if model_3d_path.exists() and model_5d_path.exists() and meta_path.exists():
-        with open(meta_path, "rb") as f:
-            meta = pickle.load(f)
-        features_3d = meta["features_3d"]
-        features_5d = meta["features_5d"]
-
-        with open(model_3d_path, "rb") as f:
-            model_3d = pickle.load(f)
-        with open(model_5d_path, "rb") as f:
-            model_5d = pickle.load(f)
-
-        # Only predict where features are available
-        mask_3d = combined[features_3d].notna().all(axis=1)
-        mask_5d = combined[features_5d].notna().all(axis=1)
-
-        combined.loc[mask_3d, "pred_delta_3d"] = model_3d.predict(combined.loc[mask_3d, features_3d].values)
-        combined.loc[mask_5d, "pred_delta_5d"] = model_5d.predict(combined.loc[mask_5d, features_5d].values)
-        combined["proj_T3"] = combined["guaiba_nivel_mean"] + combined["pred_delta_3d"]
-        combined["proj_T5"] = combined["guaiba_nivel_mean"] + combined["pred_delta_5d"]
-
-        print(f"  Predictions: {mask_3d.sum()} T+3, {mask_5d.sum()} T+5")
-
-        # ── Binary model predictions ──
-        binary_model_path = models_dir / "binary_model.pkl"
-        ob_feats_path = PROJECT_ROOT / "data" / "processed" / "sfs_results_logreg_optbin.json"
-        if binary_model_path.exists() and ob_feats_path.exists():
-            import json
-            from sklearn.impute import SimpleImputer
-            with open(binary_model_path, "rb") as f:
-                bm = pickle.load(f)
-            with open(ob_feats_path) as f:
-                ob_feats = json.load(f)["features"]
-            bm_binners = bm["binners"]
-            bm_model = bm["model"]
-            bm_coefs = bm_model.coef_[0]
-            mask_bin = combined[ob_feats].notna().all(axis=1)
-            X_bin = np.column_stack([bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe") for f in ob_feats])
-            X_bin = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_bin)
-            combined.loc[mask_bin, "prob_extremo"] = bm_model.predict_proba(X_bin)[:, 1]
-            # Contributions
-            for i, f in enumerate(ob_feats):
-                woe = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe")
-                combined.loc[mask_bin, f"contrib_{f}"] = bm_coefs[i] * woe
-                bin_idx = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="indices")
-                bt = bm_binners[f].binning_table.build()
-                bin_labels = list(bt["Bin"])
-                combined.loc[mask_bin, f"woe_{f}"] = woe
-                combined.loc[mask_bin, f"bin_{f}"] = [bin_labels[int(j)] if 0 <= int(j) < len(bin_labels) else "N/A" for j in bin_idx]
-            print(f"  Binary model: {mask_bin.sum()} predictions")
-        else:
-            combined["prob_extremo"] = 0.0
-            print("  [WARN] Binary model not found — skipping prob_extremo")
-    else:
-        print("  [WARN] Models not found — skipping predictions")
+    combined = compute_predictions(combined)
 
     # ── STEP 7: Save ──
     combined.to_parquet(DATASET_PATH, index=False)

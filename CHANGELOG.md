@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-15 (correção estrutural do updater)
+
+- Corrigido o bug que congelava lags NaN no dataset: as features eram recalculadas numa fatia de 60 dias e cada linha "congelava" NaN ao sair do buffer (bloco observado de 03/06/2026 em diante). O `update_dataset.py` agora busca 120 dias (60 de contexto) e grava apenas os últimos 60 — a região de contexto serve só para lags/rolling corretos da 1ª linha gravada.
+- Adicionado `heal_dataset.py`: reprocessa um período com contexto completo e regrava o dataset, com backup automático em `backups/`. Curado nesta data: 03/06/2026 → 14/09/2026 (104 dias) — `proj_T5` e `prob_extremo` restaurados.
+- Histórico anterior a 03/06 permanece bit a bit idêntico (verificado); linhas de 16/07 em diante ganharam pequenas correções (≤7 cm) por rolling features com contexto completo.
+
 ## 2026-09-15
 
 - Gráfico: removida a linha "Realizado T+5"; a projeção T+5 e as barras de probabilidade passam a ser plotadas na data projetada (data-base + 5 dias), com a linha pontilhada avançando além do último dado real.
