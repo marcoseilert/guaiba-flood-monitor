@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-15
+
+- Adicionado alerta ntfy no `auto_update.py`: após a atualização/publicação do dataset, a projeção T+5 mais recente acima de 2,50 m é enviada ao tópico `alertas_mosoeilert`.
+- Restrito o alerta a horário posterior às 17h BRT — equivalente à execução das 18h no Task Scheduler — com no máximo um envio por dia. O próximo dia libera novo alerta mesmo sem retorno abaixo de 2,50 m. Falhas de envio ficam registradas no log; a atualização do dataset não é interrompida.
+
 ## 2026-08-12
 
 - Corrigido o executável usado pelo Windows Task Scheduler: `atualizar_dataset.bat` passa a chamar explicitamente o Python do ambiente Hermes (`C:\\Users\\User\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe`), que contém `numpy`, `pandas` e `pyarrow`. O Python do uv não tinha `numpy`, causando falha nas execuções de 11/08/2026.

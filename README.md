@@ -16,6 +16,7 @@ Dashboard de previsão de enchentes do Rio Guaíba em Porto Alegre, RS.
 - Análise de impacto da direção do vento (rosa dos ventos)
 - Ícones dinâmicos de precipitação (☀️⛅🌤️🌧️⛈️)
 - Atualização automática dos dados (Windows Task Scheduler, 2x/dia)
+- Alerta ntfy quando a projeção T+5 ultrapassa 2,50 m (sem duplicidade enquanto permanecer acima)
 - Glossário visual para não-técnicos
 
 ## 🏗️ Arquitetura
@@ -73,6 +74,8 @@ docs/                     # Documentação técnica
 ## 🔄 Atualização
 
 O dataset é atualizado automaticamente no Windows via **Task Scheduler, 2x ao dia** (14h e 18h, horário de Brasília). A tarefa chama `auto_update.py`, que busca os dados, recalcula as previsões e publica o dataset no GitHub. O workflow do GitHub Actions permanece desativado porque a API da ANA não funciona de forma confiável no runner do GitHub.
+
+Após cada atualização, `auto_update.py` verifica o horário de Brasília e só permite o alerta quando o horário for **posterior às 17h**. Como o Task Scheduler executa às 14h e 18h, o alerta ocorre somente na atualização das 18h. Se a projeção T+5 mais recente for **maior que 2,50 m**, uma mensagem é enviada ao tópico ntfy `alertas_mosoeilert` em `https://ntfy.sh`. É permitido um alerta por dia: o estado local registra a data do último envio em `.ntfy_alert_state.json`; no dia seguinte, um novo alerta será enviado se a condição continuar verdadeira, sem exigir retorno abaixo do limite. Para substituir servidor, tópico ou limite, podem ser usadas as variáveis `NTFY_SERVER`, `NTFY_TOPIC` e `NTFY_THRESHOLD_M`.
 
 Para atualizar manualmente:
 ```bash
