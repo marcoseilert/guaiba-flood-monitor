@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-03
+
+- Publicação migrada de token HTTPS para **deploy key SSH** (`~/.ssh/guaiba_deploy` + `core.sshCommand` no repositório): o token expirou em 30/09 e os pushes passaram a falhar/pendurar em diálogo de credencial, deixando o dashboard 4 dias defasado sem aviso. A chave SSH não expira; falhas futuras são rápidas em vez de travar.
+
 ## 2026-09-15 (correção estrutural do updater)
 
 - Corrigido o bug que congelava lags NaN no dataset: as features eram recalculadas numa fatia de 60 dias e cada linha "congelava" NaN ao sair do buffer (bloco observado de 03/06/2026 em diante). O `update_dataset.py` agora busca 120 dias (60 de contexto) e grava apenas os últimos 60 — a região de contexto serve só para lags/rolling corretos da 1ª linha gravada.
