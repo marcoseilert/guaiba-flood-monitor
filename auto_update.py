@@ -203,10 +203,15 @@ def run():
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0 and "nothing to commit" not in result.stdout and "nothing to commit" not in result.stderr:
-        log(f"ERRO no commit: {result.stderr[:500]}")
+    commit_msg = (result.stdout or "") + (result.stderr or "")
+    # git diz "nothing to commit, working tree clean" (árvore limpa) OU
+    # "nothing added to commit but untracked files present" (com arquivos não
+    # rastreados — o caso deste repositório). Ambos significam: sucesso, sem commit.
+    nothing_to_commit = ("nothing to commit" in commit_msg) or ("nothing added to commit" in commit_msg)
+    if result.returncode != 0 and not nothing_to_commit:
+        log(f"ERRO no commit: {(result.stderr or result.stdout)[:500]}")
         return False
-    if "nothing to commit" in result.stdout or "nothing to commit" in result.stderr:
+    if nothing_to_commit:
         log("Nada para commitar")
     else:
         log(f"Commit: {result.stdout.strip()}")
