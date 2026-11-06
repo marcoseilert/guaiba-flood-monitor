@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-05
+
+- Ambiente: fixado `cvxpy==1.6.7` no venv Hermes (era 1.9.2, que exige numpy 2.x via `numpy.lib.array_utils`; com numpy 1.26.4 o `pickle.load` do modelo binário quebrava e abortava TODO o update — dashboard 26 dias parado, 11/10→05/11). Não subir cvxpy para 1.9+ enquanto o numpy for 1.x.
+- `update_dataset.py`: bloco do modelo binário agora com try/except — se `prob_extremo` falhar, segue com T+3/T+5 e NaN na probabilidade (nunca mais derruba a run).
+- Catch-up 11/10→05/11 publicado: 26 dias, T+3/T+5 OK, `prob_extremo` restaurada (2789 preds, 0 NaN nos últimos 27 dias). Último: nível 1,30m, T+5 1,09m.
+
 ## 2026-10-03
 
 - Publicação migrada de token HTTPS para **deploy key SSH** (`~/.ssh/guaiba_deploy` + `core.sshCommand` no repositório): o token expirou em 30/09 e os pushes passaram a falhar/pendurar em diálogo de credencial, deixando o dashboard 4 dias defasado sem aviso. A chave SSH não expira; falhas futuras são rápidas em vez de travar.
