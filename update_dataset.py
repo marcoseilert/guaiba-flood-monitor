@@ -426,33 +426,40 @@ def compute_predictions(combined):
 
         print(f"  Predictions: {mask_3d.sum()} T+3, {mask_5d.sum()} T+5")
 
-        # ── Binary model predictions ──
+        # ── Binary model predictions (opcional: nunca pode derrubar o update) ──
         binary_model_path = models_dir / "binary_model.pkl"
         ob_feats_path = PROJECT_ROOT / "data" / "processed" / "sfs_results_logreg_optbin.json"
         if binary_model_path.exists() and ob_feats_path.exists():
-            import json
-            from sklearn.impute import SimpleImputer
-            with open(binary_model_path, "rb") as f:
-                bm = pickle.load(f)
-            with open(ob_feats_path) as f:
-                ob_feats = json.load(f)["features"]
-            bm_binners = bm["binners"]
-            bm_model = bm["model"]
-            bm_coefs = bm_model.coef_[0]
-            mask_bin = combined[ob_feats].notna().all(axis=1)
-            X_bin = np.column_stack([bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe") for f in ob_feats])
-            X_bin = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_bin)
-            combined.loc[mask_bin, "prob_extremo"] = bm_model.predict_proba(X_bin)[:, 1]
-            # Contributions
-            for i, f in enumerate(ob_feats):
-                woe = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe")
-                combined.loc[mask_bin, f"contrib_{f}"] = bm_coefs[i] * woe
-                bin_idx = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="indices")
-                bt = bm_binners[f].binning_table.build()
-                bin_labels = list(bt["Bin"])
-                combined.loc[mask_bin, f"woe_{f}"] = woe
-                combined.loc[mask_bin, f"bin_{f}"] = [bin_labels[int(j)] if 0 <= int(j) < len(bin_labels) else "N/A" for j in bin_idx]
-            print(f"  Binary model: {mask_bin.sum()} predictions")
+            try:
+                import json
+                from sklearn.impute import SimpleImputer
+                with open(binary_model_path, "rb") as f:
+                    bm = pickle.load(f)
+                with open(ob_feats_path) as f:
+                    ob_feats = json.load(f)["features"]
+                bm_binners = bm["binners"]
+                bm_model = bm["model"]
+                bm_coefs = bm_model.coef_[0]
+                mask_bin = combined[ob_feats].notna().all(axis=1)
+                X_bin = np.column_stack([bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe") for f in ob_feats])
+                X_bin = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X_bin)
+                combined.loc[mask_bin, "prob_extremo"] = bm_model.predict_proba(X_bin)[:, 1]
+                # Contributions
+                for i, f in enumerate(ob_feats):
+                    woe = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="woe")
+                    combined.loc[mask_bin, f"contrib_{f}"] = bm_coefs[i] * woe
+                    bin_idx = bm_binners[f].transform(combined.loc[mask_bin, f].values, metric="indices")
+                    bt = bm_binners[f].binning_table.build()
+                    bin_labels = list(bt["Bin"])
+                    combined.loc[mask_bin, f"woe_{f}"] = woe
+                    combined.loc[mask_bin, f"bin_{f}"] = [bin_labels[int(j)] if 0 <= int(j) < len(bin_labels) else "N/A" for j in bin_idx]
+                print(f"  Binary model: {mask_bin.sum()} predictions")
+            except Exception as e:
+                # Ambiente quebrou optbinning/cvxpy/numpy (ex.: 26 dias parados em out/2026):
+                # probabilidade fica indisponível, mas T+3/T+5 seguem. Nunca derrubar o update.
+                if "prob_extremo" not in combined.columns:
+                    combined["prob_extremo"] = float("nan")
+                print(f"  [WARN] Binary model falhou ({type(e).__name__}: {e}) — prob_extremo indisponível, T+3/T+5 OK")
         else:
             combined["prob_extremo"] = 0.0
             print("  [WARN] Binary model not found — skipping prob_extremo")
